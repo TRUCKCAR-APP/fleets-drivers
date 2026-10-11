@@ -1,6 +1,5 @@
 package escuelaing.edu.co.truckdar.fleets_drivers.service;
 
-import escuelaing.edu.co.truckdar.fleets_drivers.dto.event.VehicleTelemetryEvent;
 import escuelaing.edu.co.truckdar.fleets_drivers.dto.request.UpdateDriverVehicleStateRequest;
 import escuelaing.edu.co.truckdar.fleets_drivers.dto.response.DriverVehicleStateResponse;
 import escuelaing.edu.co.truckdar.fleets_drivers.exception.ResourceNotFoundException;
@@ -8,9 +7,8 @@ import escuelaing.edu.co.truckdar.fleets_drivers.model.DriverVehicleState;
 import escuelaing.edu.co.truckdar.fleets_drivers.repository.DriverVehicleStateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,15 +21,13 @@ import java.util.stream.StreamSupport;
 public class FleetDriverService implements IFleetDriverService {
 
     private final DriverVehicleStateRepository repository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxEventService outboxEventService;
 
-    @Value("${truckdar.kafka.topic.vehicle-status:truckdar.events.vehicle-status}")
-    private String vehicleStatusTopic;
-
-    @Value("${truckdar.shift.max-daily-driving-hours:9.0}")
+    @org.springframework.beans.factory.annotation.Value("${truckdar.shift.max-daily-driving-hours:9.0}")
     private Double maxDailyDrivingHours;
 
     @Override
+    @Transactional
     public DriverVehicleStateResponse saveOrUpdateState(UpdateDriverVehicleStateRequest request) {
         double grossWeight = 0.0;
         if (request.getTareWeightTons() != null) {
@@ -83,19 +79,8 @@ public class FleetDriverService implements IFleetDriverService {
 
         DriverVehicleState saved = repository.save(entity);
 
-        VehicleTelemetryEvent event = VehicleTelemetryEvent.builder()
-                .driverId(saved.getDriverId())
-                .vehiclePlate(saved.getVehiclePlate())
-                .latitude(saved.getCurrentLatitude())
-                .longitude(saved.getCurrentLongitude())
-                .speedKmH(saved.getCurrentSpeedKmH())
-                .remainingDrivingHours(saved.getRemainingDrivingHours())
-                .status(saved.getStatus())
-                .timestamp(saved.getLastUpdate())
-                .build();
-
-        kafkaTemplate.send(vehicleStatusTopic, saved.getDriverId(), event);
-        log.info("Evento emitido a Kafka en tópico [{}] para la placa: {}", vehicleStatusTopic, saved.getVehiclePlate());
+        outboxEventService.enqueueAvailabilityEvent(saved);
+        log.info("Estado de disponibilidad encolado en Outbox para la placa: {}", saved.getVehiclePlate());
 
         return mapToResponse(saved);
     }
