@@ -24,10 +24,32 @@ public class FleetDriverController {
 
     private final IFleetDriverService service;
 
+    /**
+     * Estado y ubicación de un conductor: el propio CONDUCTOR (solo su driverId), la torre de control
+     * (COORDINADOR o ADMIN) o un servicio interno (sin X-Auth-User).
+     */
     @PostMapping("/state")
     public ResponseEntity<DriverVehicleStateResponse> updateState(
-            @Valid @RequestBody UpdateDriverVehicleStateRequest request) {
+            @Valid @RequestBody UpdateDriverVehicleStateRequest request,
+            @RequestHeader(value = AUTH_USER_HEADER, required = false) String authenticatedUserId,
+            @RequestHeader(value = AUTH_ROLE_HEADER, required = false) String authenticatedRole) {
+        requireStateWriteAccess(request.getDriverId(), authenticatedUserId, authenticatedRole);
         return ResponseEntity.ok(service.saveOrUpdateState(request));
+    }
+
+    private static void requireStateWriteAccess(String driverId, String authenticatedUserId, String authenticatedRole) {
+        boolean userRequest = authenticatedUserId != null && !authenticatedUserId.isBlank();
+        if (!userRequest || (authenticatedRole != null && FLEET_VIEWER_ROLES.contains(authenticatedRole))) {
+            return;
+        }
+        if (!"CONDUCTOR".equals(authenticatedRole)) {
+            throw new FleetAccessDeniedException("El rol " + (authenticatedRole == null || authenticatedRole.isBlank()
+                    ? "(sin rol)" : authenticatedRole) + " no puede actualizar el estado de la flota");
+        }
+        if (!authenticatedUserId.equals(driverId)) {
+            throw new FleetAccessDeniedException("Un conductor solo puede actualizar su propio estado (driverId "
+                    + driverId + " no corresponde al usuario autenticado)");
+        }
     }
 
     @GetMapping("/drivers/{driverId}")
