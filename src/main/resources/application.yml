@@ -37,6 +37,12 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 truckdar:
+  services:
+    # Load-Allocation: verifica la propiedad de una carga al suscribirse a /topic/trip/{loadId}.
+    load-allocation-url: ${TRUCKDAR_SERVICES_LOAD_ALLOCATION_URL:http://localhost:8083}
+  websocket:
+    # Orígenes del handshake de /ws-telemetry (el api-gateway ya filtra CORS y no reenvía Origin).
+    allowed-origin-patterns: ${TRUCKDAR_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
   kafka:
     topic:
       vehicle-status: ${TRUCKDAR_VEHICLE_STATUS_TOPIC:truckdar.events.vehicle-status}

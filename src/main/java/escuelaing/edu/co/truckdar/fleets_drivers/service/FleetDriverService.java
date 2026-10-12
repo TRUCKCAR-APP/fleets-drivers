@@ -2,6 +2,8 @@ package escuelaing.edu.co.truckdar.fleets_drivers.service;
 
 import escuelaing.edu.co.truckdar.fleets_drivers.dto.request.UpdateDriverVehicleStateRequest;
 import escuelaing.edu.co.truckdar.fleets_drivers.dto.response.DriverVehicleStateResponse;
+import escuelaing.edu.co.truckdar.fleets_drivers.dto.telemetry.FleetLocationMessage;
+import escuelaing.edu.co.truckdar.fleets_drivers.dto.telemetry.LocationUpdateMessage;
 import escuelaing.edu.co.truckdar.fleets_drivers.exception.ResourceNotFoundException;
 import escuelaing.edu.co.truckdar.fleets_drivers.model.DriverVehicleState;
 import escuelaing.edu.co.truckdar.fleets_drivers.repository.DriverVehicleStateRepository;
@@ -81,11 +83,11 @@ public class FleetDriverService implements IFleetDriverService {
                 .currentSpeedKmH(request.getCurrentSpeedKmH())
                 .status(request.getStatus() != null ? request.getStatus() : "ACTIVO")
                 .lastUpdate(now)
-                // La telemetría no conoce las cargas: se conservan las que ya registraron los eventos.
-                .activeLoads(repository.findById(request.getDriverId())
-                        .map(existing -> activeLoadsOf(existing))
-                        .orElseGet(HashMap::new))
                 .build();
+        // El formulario no conoce las cargas ni el rumbo GPS: se conservan los que ya estaban registrados.
+        DriverVehicleState existing = repository.findById(request.getDriverId()).orElse(null);
+        entity.setActiveLoads(existing == null ? new HashMap<>() : activeLoadsOf(existing));
+        entity.setCurrentHeading(existing == null ? null : existing.getCurrentHeading());
 
         DriverVehicleState saved = repository.save(entity);
 
@@ -130,6 +132,48 @@ public class FleetDriverService implements IFleetDriverService {
      * Refleja el status de una carga en el conductor asignado: ASSIGNED/IN_TRANSIT la marca activa y
      * cualquier otro (DELIVERED, CANCELLED...) la libera. Es idempotente y no depende del orden entre cargas.
      */
+    @Override
+    public FleetLocationMessage recordLocation(LocationUpdateMessage update) {
+        DriverVehicleState state = repository.findById(update.getDriverId())
+                .orElseThrow(() -> new ResourceNotFoundException("El conductor " + update.getDriverId()
+                        + " no tiene vehículo registrado en la flota"));
+        LocalDateTime now = LocalDateTime.now();
+        state.setCurrentLatitude(update.getLatitude());
+        state.setCurrentLongitude(update.getLongitude());
+        if (update.getSpeedKmH() != null) {
+            state.setCurrentSpeedKmH(update.getSpeedKmH());
+        }
+        if (update.getHeading() != null) {
+            state.setCurrentHeading(update.getHeading());
+        }
+        state.setLastUpdate(now);
+        // Telemetría frecuente: se guarda la posición sin encolar un evento de disponibilidad por cada punto.
+        repository.save(state);
+
+        // Solo se asocia la posición a una carga si es una carga activa del conductor (ASSIGNED/IN_TRANSIT).
+        Map<String, String> active = activeLoadsOf(state);
+        String loadStatus = update.getLoadId() == null ? null : active.get(update.getLoadId().toString());
+        return FleetLocationMessage.builder()
+                .driverId(state.getDriverId())
+                .driverName(state.getDriverName())
+                .vehiclePlate(state.getVehiclePlate())
+                .latitude(state.getCurrentLatitude())
+                .longitude(state.getCurrentLongitude())
+                .speedKmH(state.getCurrentSpeedKmH())
+                .heading(state.getCurrentHeading())
+                .loadId(loadStatus == null ? null : update.getLoadId())
+                .loadStatus(loadStatus)
+                .timestamp(now.atZone(java.time.ZoneId.systemDefault()).toInstant())
+                .build();
+    }
+
+    @Override
+    public boolean isActiveLoadOf(String driverId, Long loadId) {
+        return driverId != null && loadId != null && repository.findById(driverId)
+                .map(state -> activeLoadsOf(state).containsKey(loadId.toString()))
+                .orElse(false);
+    }
+
     @Override
     public boolean applyLoadStatus(String driverId, Long loadId, String loadStatus) {
         if (driverId == null || loadId == null || loadStatus == null) {
@@ -192,6 +236,7 @@ public class FleetDriverService implements IFleetDriverService {
                 .currentLatitude(entity.getCurrentLatitude())
                 .currentLongitude(entity.getCurrentLongitude())
                 .currentSpeedKmH(entity.getCurrentSpeedKmH())
+                .currentHeading(entity.getCurrentHeading())
                 .status(entity.getStatus())
                 .lastUpdate(entity.getLastUpdate())
                 .build();

@@ -54,6 +54,8 @@ public class DriverVehicleState implements Serializable {
     private Double currentLatitude;
     private Double currentLongitude;
     private Double currentSpeedKmH;
+    /** Rumbo en grados (0 = norte, sentido horario), reportado por la telemetría GPS. */
+    private Double currentHeading;
     private String status;
     private LocalDateTime lastUpdate;
 

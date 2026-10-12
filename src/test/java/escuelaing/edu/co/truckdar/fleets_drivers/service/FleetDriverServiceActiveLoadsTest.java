@@ -129,4 +129,33 @@ class FleetDriverServiceActiveLoadsTest {
         assertThat(response.isOnTrip()).isTrue();
         assertThat(response.getCurrentLoadId()).isEqualTo(10L);
     }
+
+    @Test
+    void recordLocationUpdatesPositionAndKeepsOnlyAnActiveLoadId() {
+        DriverVehicleState ana = driver("ana", "ACTIVO", Map.of("30", "IN_TRANSIT"));
+        ana.setDriverName("Ana Torres");
+
+        var onTrip = service.recordLocation(escuelaing.edu.co.truckdar.fleets_drivers.dto.telemetry.LocationUpdateMessage
+                .builder().driverId("ana").latitude(4.7).longitude(-74.2).speedKmH(55.0).heading(180.0).loadId(30L).build());
+        var otherLoad = service.recordLocation(escuelaing.edu.co.truckdar.fleets_drivers.dto.telemetry.LocationUpdateMessage
+                .builder().driverId("ana").latitude(4.8).longitude(-74.3).loadId(99L).build());
+
+        assertThat(ana.getCurrentLatitude()).isEqualTo(4.8);
+        assertThat(ana.getCurrentHeading()).isEqualTo(180.0);
+        assertThat(ana.getCurrentSpeedKmH()).isEqualTo(55.0);
+        assertThat(onTrip.getLoadId()).isEqualTo(30L);
+        assertThat(onTrip.getLoadStatus()).isEqualTo("IN_TRANSIT");
+        assertThat(otherLoad.getLoadId()).isNull();
+        verify(outboxEventService, never()).enqueueAvailabilityEvent(any());
+    }
+
+    @Test
+    void recordLocationForADriverWithoutVehicleFails() {
+        when(repository.findById("fantasma")).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.recordLocation(
+                escuelaing.edu.co.truckdar.fleets_drivers.dto.telemetry.LocationUpdateMessage.builder()
+                        .driverId("fantasma").latitude(4.7).longitude(-74.2).build()))
+                .isInstanceOf(escuelaing.edu.co.truckdar.fleets_drivers.exception.ResourceNotFoundException.class);
+    }
 }
