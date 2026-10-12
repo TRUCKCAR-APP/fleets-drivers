@@ -46,4 +46,10 @@ public class DriverVehicleStateResponse {
     private Double currentSpeedKmH;
     private String status;
     private LocalDateTime lastUpdate;
+
+    /** Carga en curso del conductor (IN_TRANSIT tiene prioridad sobre ASSIGNED); null si está libre. */
+    private Long currentLoadId;
+    private String currentLoadStatus;
+    /** true si tiene una carga aceptada o en ruta: no debe recibir otra. */
+    private boolean onTrip;
 }

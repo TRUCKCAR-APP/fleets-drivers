@@ -10,7 +10,9 @@ import org.springframework.data.redis.core.index.Indexed;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -54,4 +56,8 @@ public class DriverVehicleState implements Serializable {
     private Double currentSpeedKmH;
     private String status;
     private LocalDateTime lastUpdate;
+
+    /** Cargas activas del conductor (loadId -> ASSIGNED | IN_TRANSIT), derivadas de los eventos de Load-Allocation. */
+    @Builder.Default
+    private Map<String, String> activeLoads = new HashMap<>();
 }

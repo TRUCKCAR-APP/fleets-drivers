@@ -10,4 +10,6 @@ public interface IFleetDriverService {
     DriverVehicleStateResponse getStateByDriverId(String driverId);
     DriverVehicleStateResponse getStateByPlate(String plate);
     List<DriverVehicleStateResponse> getAllActiveVehicles();
+    List<DriverVehicleStateResponse> getAvailableForNewLoad();
+    boolean applyLoadStatus(String driverId, Long loadId, String loadStatus);
 }

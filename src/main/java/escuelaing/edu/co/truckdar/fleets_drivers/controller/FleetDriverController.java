@@ -38,4 +38,10 @@ public class FleetDriverController {
     public ResponseEntity<List<DriverVehicleStateResponse>> getAllActive() {
         return ResponseEntity.ok(service.getAllActiveVehicles());
     }
+
+    /** Conductores ACTIVO sin carga aceptada ni en ruta: candidatos para el motor de asignación. */
+    @GetMapping("/available")
+    public ResponseEntity<List<DriverVehicleStateResponse>> getAvailable() {
+        return ResponseEntity.ok(service.getAvailableForNewLoad());
+    }
 }

@@ -11,7 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -22,6 +26,8 @@ public class FleetDriverService implements IFleetDriverService {
 
     private final DriverVehicleStateRepository repository;
     private final OutboxEventService outboxEventService;
+
+    private static final Set<String> COMMITTED_LOAD_STATUSES = Set.of("ASSIGNED", "IN_TRANSIT");
 
     @org.springframework.beans.factory.annotation.Value("${truckdar.shift.max-daily-driving-hours:9.0}")
     private Double maxDailyDrivingHours;
@@ -75,6 +81,10 @@ public class FleetDriverService implements IFleetDriverService {
                 .currentSpeedKmH(request.getCurrentSpeedKmH())
                 .status(request.getStatus() != null ? request.getStatus() : "ACTIVO")
                 .lastUpdate(now)
+                // La telemetría no conoce las cargas: se conservan las que ya registraron los eventos.
+                .activeLoads(repository.findById(request.getDriverId())
+                        .map(existing -> activeLoadsOf(existing))
+                        .orElseGet(HashMap::new))
                 .build();
 
         DriverVehicleState saved = repository.save(entity);
@@ -106,8 +116,57 @@ public class FleetDriverService implements IFleetDriverService {
                 .collect(Collectors.toList());
     }
 
+    /** Conductores ACTIVO sin carga aceptada ni en ruta: los únicos que pueden recibir una carga nueva. */
+    @Override
+    public List<DriverVehicleStateResponse> getAvailableForNewLoad() {
+        return StreamSupport.stream(repository.findAll().spliterator(), false)
+                .filter(state -> state != null && "ACTIVO".equalsIgnoreCase(state.getStatus()))
+                .filter(state -> activeLoadsOf(state).isEmpty())
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Refleja el status de una carga en el conductor asignado: ASSIGNED/IN_TRANSIT la marca activa y
+     * cualquier otro (DELIVERED, CANCELLED...) la libera. Es idempotente y no depende del orden entre cargas.
+     */
+    @Override
+    public boolean applyLoadStatus(String driverId, Long loadId, String loadStatus) {
+        if (driverId == null || loadId == null || loadStatus == null) {
+            return false;
+        }
+        DriverVehicleState state = repository.findById(driverId).orElse(null);
+        if (state == null) {
+            log.debug("Carga #{} ({}) ignorada: el conductor {} no tiene estado en la flota", loadId, loadStatus, driverId);
+            return false;
+        }
+        Map<String, String> active = activeLoadsOf(state);
+        String key = loadId.toString();
+        boolean changed = COMMITTED_LOAD_STATUSES.contains(loadStatus)
+                ? !loadStatus.equals(active.put(key, loadStatus))
+                : active.remove(key) != null;
+        if (!changed) {
+            return false;
+        }
+        state.setActiveLoads(active);
+        repository.save(state);
+        log.info("Conductor {}: carga #{} -> {}; cargas activas {}", driverId, loadId, loadStatus, active);
+        return true;
+    }
+
+    private Map<String, String> activeLoadsOf(DriverVehicleState state) {
+        return state.getActiveLoads() == null ? new HashMap<>() : new HashMap<>(state.getActiveLoads());
+    }
+
     private DriverVehicleStateResponse mapToResponse(DriverVehicleState entity) {
+        Map.Entry<String, String> current = activeLoadsOf(entity).entrySet().stream()
+                .min(Comparator.comparing((Map.Entry<String, String> e) -> !"IN_TRANSIT".equals(e.getValue()))
+                        .thenComparing(e -> -Long.parseLong(e.getKey())))
+                .orElse(null);
         return DriverVehicleStateResponse.builder()
+                .currentLoadId(current == null ? null : Long.valueOf(current.getKey()))
+                .currentLoadStatus(current == null ? null : current.getValue())
+                .onTrip(current != null)
                 .driverId(entity.getDriverId())
                 .driverName(entity.getDriverName())
                 .licenseCategory(entity.getLicenseCategory())
