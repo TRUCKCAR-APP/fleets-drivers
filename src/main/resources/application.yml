@@ -6,9 +6,9 @@ spring:
     name: ms-fleets-drivers
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/truckdar_db
-    username: truckdar_admin
-    password: truckdar_password
+    url: jdbc:postgresql://localhost:5432/truckcar_db
+    username: truckcar_admin
+    password: truckcar_password
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -36,17 +36,17 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
-truckdar:
+truckcar:
   services:
     # Load-Allocation: verifica la propiedad de una carga al suscribirse a /topic/trip/{loadId}.
-    load-allocation-url: ${TRUCKDAR_SERVICES_LOAD_ALLOCATION_URL:http://localhost:8083}
+    load-allocation-url: ${TRUCKCAR_SERVICES_LOAD_ALLOCATION_URL:http://localhost:8083}
   websocket:
     # Orígenes del handshake de /ws-telemetry (el api-gateway ya filtra CORS y no reenvía Origin).
-    allowed-origin-patterns: ${TRUCKDAR_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+    allowed-origin-patterns: ${TRUCKCAR_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
   kafka:
     topic:
-      vehicle-status: ${TRUCKDAR_VEHICLE_STATUS_TOPIC:truckdar.events.vehicle-status}
-      load-events: ${TRUCKDAR_LOAD_EVENTS_TOPIC:truckdar.events.load-allocation}
+      vehicle-status: ${TRUCKCAR_VEHICLE_STATUS_TOPIC:truckcar.events.vehicle-status}
+      load-events: ${TRUCKCAR_LOAD_EVENTS_TOPIC:truckcar.events.load-allocation}
   outbox:
-    publish-interval-ms: ${TRUCKDAR_OUTBOX_PUBLISH_INTERVAL_MS:1000}
-    batch-size: ${TRUCKDAR_OUTBOX_BATCH_SIZE:100}
+    publish-interval-ms: ${TRUCKCAR_OUTBOX_PUBLISH_INTERVAL_MS:1000}
+    batch-size: ${TRUCKCAR_OUTBOX_BATCH_SIZE:100}

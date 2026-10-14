@@ -1,13 +1,13 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: truckdar-redis
+    container_name: truckcar-redis
     ports:
       - "6379:6379"
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
-    container_name: truckdar-zookeeper
+    container_name: truckcar-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -16,7 +16,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
-    container_name: truckdar-kafka
+    container_name: truckcar-kafka
     depends_on:
       - zookeeper
     ports:

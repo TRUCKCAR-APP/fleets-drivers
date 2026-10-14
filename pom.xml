@@ -8,11 +8,11 @@
 		<version>3.3.4</version>
 		<relativePath/>
 	</parent>
-	<groupId>escuelaing.edu.co.truckdar</groupId>
+	<groupId>escuelaing.edu.co.truckcar</groupId>
 	<artifactId>fleets-drivers</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>fleets-drivers</name>
-	<description>Microservicio de gestión de flotas, cabinas y conductores para TruckDar</description>
+	<description>Microservicio de gestión de flotas, cabinas y conductores para TruckCar</description>
 
 	<properties>
 		<java.version>21</java.version>
