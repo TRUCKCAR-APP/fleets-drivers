@@ -134,10 +134,32 @@ public class FleetDriverService implements IFleetDriverService {
      */
     @Override
     public FleetLocationMessage recordLocation(LocationUpdateMessage update) {
-        DriverVehicleState state = repository.findById(update.getDriverId())
-                .orElseThrow(() -> new ResourceNotFoundException("El conductor " + update.getDriverId()
+        DriverVehicleState state = requireState(update.getDriverId());
+        return applyLocation(state, update, LocalDateTime.now());
+    }
+
+    /**
+     * Posición registrada sin señal y sincronizada después: solo actualiza el estado vivo si es más reciente que el
+     * último dato conocido (una ráfaga tardía no puede hacer "retroceder" al camión en el mapa).
+     */
+    @Override
+    public java.util.Optional<FleetLocationMessage> recordLocationAt(LocationUpdateMessage update,
+                                                                     java.time.Instant recordedAt) {
+        DriverVehicleState state = requireState(update.getDriverId());
+        LocalDateTime at = LocalDateTime.ofInstant(recordedAt, java.time.ZoneId.systemDefault());
+        if (state.getLastUpdate() != null && !at.isAfter(state.getLastUpdate())) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(applyLocation(state, update, at));
+    }
+
+    private DriverVehicleState requireState(String driverId) {
+        return repository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("El conductor " + driverId
                         + " no tiene vehículo registrado en la flota"));
-        LocalDateTime now = LocalDateTime.now();
+    }
+
+    private FleetLocationMessage applyLocation(DriverVehicleState state, LocationUpdateMessage update, LocalDateTime now) {
         state.setCurrentLatitude(update.getLatitude());
         state.setCurrentLongitude(update.getLongitude());
         if (update.getSpeedKmH() != null) {

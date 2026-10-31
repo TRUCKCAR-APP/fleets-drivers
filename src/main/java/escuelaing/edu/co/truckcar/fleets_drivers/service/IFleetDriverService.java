@@ -16,6 +16,8 @@ public interface IFleetDriverService {
     boolean applyLoadStatus(String driverId, Long loadId, String loadStatus);
     /** Telemetría GPS: actualiza la posición del conductor y devuelve el mensaje a retransmitir. */
     FleetLocationMessage recordLocation(LocationUpdateMessage update);
+    /** Posición sincronizada desde la cola offline; vacío si el estado vivo ya es más reciente. */
+    java.util.Optional<FleetLocationMessage> recordLocationAt(LocationUpdateMessage update, java.time.Instant recordedAt);
     /** true si loadId es una carga ASSIGNED/IN_TRANSIT del conductor (según los eventos de Load-Allocation). */
     boolean isActiveLoadOf(String driverId, Long loadId);
     /** Cargas ASSIGNED/IN_TRANSIT del conductor; vacío si no tiene estado en la flota. */

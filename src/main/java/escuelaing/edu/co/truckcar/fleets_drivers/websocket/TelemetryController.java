@@ -3,6 +3,7 @@ package escuelaing.edu.co.truckcar.fleets_drivers.websocket;
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.FleetLocationMessage;
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.LocationUpdateMessage;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.IFleetDriverService;
+import escuelaing.edu.co.truckcar.fleets_drivers.service.PositionHistory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
@@ -25,6 +26,7 @@ public class TelemetryController {
     private final IFleetDriverService fleetDriverService;
     private final TelemetryAccessPolicy accessPolicy;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PositionHistory positionHistory;
 
     @MessageMapping("/telemetry")
     public void receiveLocation(@Payload LocationUpdateMessage update, Principal principal) {
@@ -35,6 +37,7 @@ public class TelemetryController {
         }
         validate(update);
         FleetLocationMessage location = fleetDriverService.recordLocation(update);
+        positionHistory.recordLive(update, location.getTimestamp());
         messagingTemplate.convertAndSend(TelemetryAccessPolicy.FLEET_TOPIC, location);
         if (location.getLoadId() != null) {
             messagingTemplate.convertAndSend(TelemetryAccessPolicy.TRIP_TOPIC_PREFIX + location.getLoadId(), location);
@@ -52,7 +55,8 @@ public class TelemetryController {
                 "timestamp", Instant.now().toString());
     }
 
-    private static void validate(LocationUpdateMessage update) {
+    /** Lo usa también la ingesta offline (FleetSyncService): mismas reglas para posiciones en vivo y diferidas. */
+    public static void validate(LocationUpdateMessage update) {
         Double latitude = update.getLatitude();
         Double longitude = update.getLongitude();
         if (latitude == null || longitude == null || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
