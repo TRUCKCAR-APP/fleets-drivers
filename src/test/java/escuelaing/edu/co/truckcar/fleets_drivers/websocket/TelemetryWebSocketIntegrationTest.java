@@ -6,8 +6,11 @@ import escuelaing.edu.co.truckcar.fleets_drivers.service.IFleetDriverService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
@@ -19,6 +22,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.lang.reflect.Type;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -38,7 +43,14 @@ import static org.mockito.Mockito.when;
  * Conexión STOMP real contra /ws-telemetry: handshake con la identidad del gateway, permisos de publicación y de
  * suscripción, y retransmisión a la torre de control. Los listeners de Kafka no arrancan para no consumir los
  * eventos del entorno local.
+ * <p>
+ * Un frame rechazado hace que el servidor envíe ERROR y cierre la sesión. Spring puede perder ese ERROR: si otro hilo
+ * está enviando a la sesión, ConcurrentWebSocketSessionDecorator lo deja en su buffer y el cierre inmediato lo descarta.
+ * Por eso los rechazos se comprueban con lo que siempre ocurre (el cierre de la sesión y el motivo en el log del
+ * servidor, que se escribe antes de responder) y el texto del ERROR solo cuando llegó, que es antes del cierre porque
+ * ambos viajan en orden por la misma conexión.
  */
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.kafka.listener.auto-startup=false")
 class TelemetryWebSocketIntegrationTest {
@@ -63,11 +75,17 @@ class TelemetryWebSocketIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        sessions.forEach(session -> { if (session.isConnected()) session.disconnect(); });
+        sessions.forEach(session -> {
+            try {
+                session.disconnect();
+            } catch (RuntimeException alreadyClosed) {
+                // El servidor cerró la sesión (rechazo) entre la prueba y el cierre: no queda nada que desconectar.
+            }
+        });
         stompClient.stop();
     }
 
-    /** Conecta como lo haría el api-gateway tras validar el JWT; errors recibe los frames ERROR del servidor. */
+    /** Conecta como lo haría el api-gateway tras validar el JWT; errors recibe el mensaje de un frame ERROR. */
     private StompSession connect(String userId, String role, CompletableFuture<String> errors) throws Exception {
         WebSocketHttpHeaders handshake = new WebSocketHttpHeaders();
         if (userId != null) {
@@ -105,6 +123,19 @@ class TelemetryWebSocketIntegrationTest {
             }
         });
         return received;
+    }
+
+    /**
+     * Espera de forma determinista el rechazo del servidor: la sesión siempre termina cerrada y el motivo siempre queda
+     * en el log. Si el ERROR llegó (antes del cierre), también debe traer el motivo.
+     */
+    private static void assertRejected(StompSession session, CompletableFuture<String> errorFrame, CapturedOutput output,
+                                       String logReason, String errorReason) {
+        await().atMost(Duration.ofSeconds(10)).until(() -> !session.isConnected());
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(output.getOut()).contains(logReason));
+        if (errorFrame.isDone()) {
+            assertThat(errorFrame.join()).contains(errorReason);
+        }
     }
 
     private static LocationUpdateMessage position(String driverId) {
@@ -156,13 +187,15 @@ class TelemetryWebSocketIntegrationTest {
     }
 
     @Test
-    void generatorCannotSubscribeToTheWholeFleet() throws Exception {
+    void generatorCannotSubscribeToTheWholeFleet(CapturedOutput output) throws Exception {
         CompletableFuture<String> serverError = new CompletableFuture<>();
         StompSession generator = connect("gen-1", "GENERADOR", serverError);
 
-        subscribe(generator, "/topic/fleet-locations");
+        CompletableFuture<Map<String, Object>> fleet = subscribe(generator, "/topic/fleet-locations");
 
-        assertThat(serverError.get(5, TimeUnit.SECONDS)).contains("No tiene permiso");
+        assertRejected(generator, serverError, output,
+                "Suscripción rechazada a /topic/fleet-locations para gen-1 (GENERADOR)", "No tiene permiso");
+        assertThat(fleet).isNotDone();
     }
 
     @Test
@@ -180,13 +213,15 @@ class TelemetryWebSocketIntegrationTest {
     }
 
     @Test
-    void clientsCannotPublishDirectlyToBrokerTopics() throws Exception {
+    void clientsCannotPublishDirectlyToBrokerTopics(CapturedOutput output) throws Exception {
         CompletableFuture<String> serverError = new CompletableFuture<>();
         StompSession ana = connect("ana", "CONDUCTOR", serverError);
 
         ana.send("/topic/fleet-locations", position("ana"));
 
-        assertThat(serverError.get(5, TimeUnit.SECONDS)).contains("/app/telemetry");
+        assertRejected(ana, serverError, output,
+                "Publicación rechazada a /topic/fleet-locations para ana (CONDUCTOR)", "/app/telemetry");
+        verify(fleetDriverService, never()).recordLocation(any());
     }
 
     @Test

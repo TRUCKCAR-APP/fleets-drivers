@@ -46,6 +46,8 @@ public class TelemetryChannelInterceptor implements ChannelInterceptor {
             throw new MessagingException("No tiene permiso para suscribirse a " + destination);
         }
         if (command == StompCommand.SEND && (destination == null || !destination.startsWith("/app/"))) {
+            log.info("Publicación rechazada a {} para {} ({})", destination,
+                    principal == null ? "anónimo" : principal.userId(), principal == null ? "-" : principal.role());
             throw new MessagingException("Solo se pueden enviar mensajes a /app/telemetry");
         }
         return message;
