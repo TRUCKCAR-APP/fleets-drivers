@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/** Posición retransmitida a /topic/fleet-locations y /topic/trip/{loadId}. */
+/** Posición retransmitida a /topic/fleet-locations y /topic/trip.{loadId}. */
 @Data
 @Builder
 @NoArgsConstructor

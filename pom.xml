@@ -34,6 +34,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
+		<!-- Cliente TCP del relay STOMP hacia RabbitMQ (enableStompBrokerRelay). Spring detecta Reactor Netty por
+		     reactor.netty.http.client.HttpClient, así que hace falta reactor-netty-http y no solo reactor-netty-core. -->
+		<dependency>
+			<groupId>io.projectreactor.netty</groupId>
+			<artifactId>reactor-netty-http</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

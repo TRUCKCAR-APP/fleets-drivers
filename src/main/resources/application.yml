@@ -38,11 +38,19 @@ spring:
 
 truckcar:
   services:
-    # Load-Allocation: verifica la propiedad de una carga al suscribirse a /topic/trip/{loadId}.
+    # Load-Allocation: verifica la propiedad de una carga al suscribirse a /topic/trip.{loadId}.
     load-allocation-url: ${TRUCKCAR_SERVICES_LOAD_ALLOCATION_URL:http://localhost:8083}
   websocket:
     # Orígenes del handshake de /ws-telemetry (el api-gateway ya filtra CORS y no reenvía Origin).
     allowed-origin-patterns: ${TRUCKCAR_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+    # Broker STOMP externo (RabbitMQ): necesario para más de una réplica. Sin él, broker simple en memoria.
+    broker-relay:
+      enabled: ${TRUCKCAR_STOMP_RELAY_ENABLED:false}
+      host: ${TRUCKCAR_STOMP_RELAY_HOST:localhost}
+      port: ${TRUCKCAR_STOMP_RELAY_PORT:61613}
+      virtual-host: ${TRUCKCAR_STOMP_RELAY_VHOST:/}
+      login: ${TRUCKCAR_STOMP_RELAY_LOGIN:guest}
+      passcode: ${TRUCKCAR_STOMP_RELAY_PASSCODE:guest}
   kafka:
     topic:
       vehicle-status: ${TRUCKCAR_VEHICLE_STATUS_TOPIC:truckcar.events.vehicle-status}

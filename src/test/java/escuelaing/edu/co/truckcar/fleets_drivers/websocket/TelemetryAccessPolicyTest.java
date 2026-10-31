@@ -50,19 +50,22 @@ class TelemetryAccessPolicyTest {
         when(fleet.isActiveLoadOf("ana", 30L)).thenReturn(true);
         when(ownership.isOwnedByGenerator(30L, "gen-1")).thenReturn(true);
 
-        assertThat(policy.canSubscribe(COORD, "/topic/trip/30")).isTrue();
-        assertThat(policy.canSubscribe(ANA, "/topic/trip/30")).isTrue();
-        assertThat(policy.canSubscribe(ANA, "/topic/trip/31")).isFalse();
-        assertThat(policy.canSubscribe(GEN, "/topic/trip/30")).isTrue();
-        assertThat(policy.canSubscribe(GEN, "/topic/trip/31")).isFalse();
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.30")).isTrue();
+        assertThat(policy.canSubscribe(ANA, "/topic/trip.30")).isTrue();
+        assertThat(policy.canSubscribe(ANA, "/topic/trip.31")).isFalse();
+        assertThat(policy.canSubscribe(GEN, "/topic/trip.30")).isTrue();
+        assertThat(policy.canSubscribe(GEN, "/topic/trip.31")).isFalse();
         verify(ownership, never()).isOwnedByGenerator(30L, "coord-1");
     }
 
     @Test
     void unknownOrMalformedDestinationsAreDenied() {
-        assertThat(policy.canSubscribe(COORD, "/topic/trip/abc")).isFalse();
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.abc")).isFalse();
         assertThat(policy.canSubscribe(COORD, "/topic/otra-cosa")).isFalse();
-        assertThat(policy.canSubscribe(COORD, "/topic/trip/30/extra")).isFalse();
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.30.extra")).isFalse();
+        // El "." es literal: la forma antigua /topic/trip/{id} y cualquier otro separador quedan fuera.
+        assertThat(policy.canSubscribe(COORD, "/topic/trip/30")).isFalse();
+        assertThat(policy.canSubscribe(COORD, "/topic/tripX30")).isFalse();
         assertThat(policy.canSubscribe(ANA, "/user/queue/errors")).isTrue();
         assertThat(policy.canSubscribe(null, "/user/queue/errors")).isFalse();
     }

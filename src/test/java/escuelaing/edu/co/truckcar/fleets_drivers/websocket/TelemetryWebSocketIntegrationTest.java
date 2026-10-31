@@ -119,7 +119,7 @@ class TelemetryWebSocketIntegrationTest {
                 .heading(210.0).loadId(30L).loadStatus("IN_TRANSIT").timestamp(Instant.now()).build());
         StompSession tower = connect("coord-1", "COORDINADOR", null);
         CompletableFuture<Map<String, Object>> fleet = subscribe(tower, "/topic/fleet-locations");
-        CompletableFuture<Map<String, Object>> trip = subscribe(tower, "/topic/trip/30");
+        CompletableFuture<Map<String, Object>> trip = subscribe(tower, "/topic/trip.30");
         Thread.sleep(300);
 
         connect("ana", "CONDUCTOR", null).send("/app/telemetry", position("ana"));
@@ -171,7 +171,7 @@ class TelemetryWebSocketIntegrationTest {
         CompletableFuture<String> serverError = new CompletableFuture<>();
         StompSession generator = connect("gen-1", "GENERADOR", serverError);
 
-        subscribe(generator, "/topic/trip/30");
+        subscribe(generator, "/topic/trip.30");
 
         verify(loadOwnershipClient, timeout(3000)).isOwnedByGenerator(30L, "gen-1");
         Thread.sleep(300);
