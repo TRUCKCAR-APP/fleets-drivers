@@ -3,7 +3,10 @@ package escuelaing.edu.co.truckcar.fleets_drivers.controller;
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.request.UpdateDriverVehicleStateRequest;
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.response.DriverVehicleStateResponse;
 import escuelaing.edu.co.truckcar.fleets_drivers.exception.FleetAccessDeniedException;
+import escuelaing.edu.co.truckcar.fleets_drivers.exception.FleetUnauthenticatedException;
+import escuelaing.edu.co.truckcar.fleets_drivers.exception.ResourceNotFoundException;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.IFleetDriverService;
+import escuelaing.edu.co.truckcar.fleets_drivers.websocket.LoadOwnershipClient;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +26,7 @@ public class FleetDriverController {
     private static final Set<String> FLEET_VIEWER_ROLES = Set.of("COORDINADOR", "ADMIN");
 
     private final IFleetDriverService service;
+    private final LoadOwnershipClient loadOwnershipClient;
 
     /**
      * Estado y ubicación de un conductor: el propio CONDUCTOR (solo su driverId), la torre de control
@@ -52,14 +56,74 @@ public class FleetDriverController {
         }
     }
 
+    /**
+     * Estado y ubicación en vivo de un conductor. Lo ven la torre de control (COORDINADOR o ADMIN), el propio CONDUCTOR
+     * y un GENERADOR solo si el conductor lleva una de sus cargas (la propiedad la confirma Load-Allocation).
+     */
     @GetMapping("/drivers/{driverId}")
-    public ResponseEntity<DriverVehicleStateResponse> getByDriver(@PathVariable String driverId) {
+    public ResponseEntity<DriverVehicleStateResponse> getByDriver(
+            @PathVariable String driverId,
+            @RequestHeader(value = AUTH_USER_HEADER, required = false) String authenticatedUserId,
+            @RequestHeader(value = AUTH_ROLE_HEADER, required = false) String authenticatedRole) {
+        requireIdentity(authenticatedUserId, authenticatedRole);
+        // El conductor se valida antes de buscar: así el 404 de "aún sin estado" solo lo recibe el dueño.
+        if ("CONDUCTOR".equals(authenticatedRole) && !authenticatedUserId.equals(driverId)) {
+            throw new FleetAccessDeniedException("Un conductor solo puede consultar su propio estado");
+        }
+        if ("GENERADOR".equals(authenticatedRole)) {
+            requireGeneratorOwnsActiveLoad(driverId, authenticatedUserId);
+        }
+        requireKnownRole(authenticatedRole);
         return ResponseEntity.ok(service.getStateByDriverId(driverId));
     }
 
     @GetMapping("/vehicles/{plate}")
-    public ResponseEntity<DriverVehicleStateResponse> getByPlate(@PathVariable String plate) {
-        return ResponseEntity.ok(service.getStateByPlate(plate));
+    public ResponseEntity<DriverVehicleStateResponse> getByPlate(
+            @PathVariable String plate,
+            @RequestHeader(value = AUTH_USER_HEADER, required = false) String authenticatedUserId,
+            @RequestHeader(value = AUTH_ROLE_HEADER, required = false) String authenticatedRole) {
+        requireIdentity(authenticatedUserId, authenticatedRole);
+        requireKnownRole(authenticatedRole);
+        if (FLEET_VIEWER_ROLES.contains(authenticatedRole)) {
+            return ResponseEntity.ok(service.getStateByPlate(plate));
+        }
+        DriverVehicleStateResponse state;
+        try {
+            state = service.getStateByPlate(plate);
+        } catch (ResourceNotFoundException e) {
+            // Sin distinguir "no existe" de "no es tuya": la placa no sirve para sondear la flota.
+            throw new FleetAccessDeniedException("No tiene acceso al vehículo " + plate);
+        }
+        if ("CONDUCTOR".equals(authenticatedRole) && !authenticatedUserId.equals(state.getDriverId())) {
+            throw new FleetAccessDeniedException("No tiene acceso al vehículo " + plate);
+        }
+        if ("GENERADOR".equals(authenticatedRole)) {
+            requireGeneratorOwnsActiveLoad(state.getDriverId(), authenticatedUserId);
+        }
+        return ResponseEntity.ok(state);
+    }
+
+    /** Estas consultas exponen la ubicación: siempre son de un usuario que pasó por el gateway. */
+    private static void requireIdentity(String authenticatedUserId, String authenticatedRole) {
+        if (authenticatedUserId == null || authenticatedUserId.isBlank()
+                || authenticatedRole == null || authenticatedRole.isBlank()) {
+            throw new FleetUnauthenticatedException("Se requiere un usuario autenticado para consultar la ubicación de la flota");
+        }
+    }
+
+    private static void requireKnownRole(String authenticatedRole) {
+        if (!FLEET_VIEWER_ROLES.contains(authenticatedRole) && !"CONDUCTOR".equals(authenticatedRole)
+                && !"GENERADOR".equals(authenticatedRole)) {
+            throw new FleetAccessDeniedException("El rol " + authenticatedRole + " no puede consultar la flota");
+        }
+    }
+
+    private void requireGeneratorOwnsActiveLoad(String driverId, String generatorUserId) {
+        boolean ownsOne = service.getActiveLoadIds(driverId).stream()
+                .anyMatch(loadId -> loadOwnershipClient.isOwnedByGenerator(loadId, generatorUserId));
+        if (!ownsOne) {
+            throw new FleetAccessDeniedException("Un generador solo puede ver a los conductores de sus cargas activas");
+        }
     }
 
     /** Posición y estado de toda la flota: torre de control (COORDINADOR o ADMIN) y servicios internos. */

@@ -175,6 +175,16 @@ public class FleetDriverService implements IFleetDriverService {
     }
 
     @Override
+    public List<Long> getActiveLoadIds(String driverId) {
+        if (driverId == null) {
+            return List.of();
+        }
+        return repository.findById(driverId)
+                .map(state -> activeLoadsOf(state).keySet().stream().map(Long::valueOf).toList())
+                .orElse(List.of());
+    }
+
+    @Override
     public boolean applyLoadStatus(String driverId, Long loadId, String loadStatus) {
         if (driverId == null || loadId == null || loadStatus == null) {
             return false;

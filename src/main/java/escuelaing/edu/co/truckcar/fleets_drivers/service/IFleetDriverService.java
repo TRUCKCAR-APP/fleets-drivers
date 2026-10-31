@@ -18,4 +18,6 @@ public interface IFleetDriverService {
     FleetLocationMessage recordLocation(LocationUpdateMessage update);
     /** true si loadId es una carga ASSIGNED/IN_TRANSIT del conductor (según los eventos de Load-Allocation). */
     boolean isActiveLoadOf(String driverId, Long loadId);
+    /** Cargas ASSIGNED/IN_TRANSIT del conductor; vacío si no tiene estado en la flota. */
+    List<Long> getActiveLoadIds(String driverId);
 }
