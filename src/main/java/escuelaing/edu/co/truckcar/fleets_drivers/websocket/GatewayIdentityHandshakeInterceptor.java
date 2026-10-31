@@ -16,6 +16,8 @@ public class GatewayIdentityHandshakeInterceptor implements HandshakeInterceptor
 
     static final String USER_ATTRIBUTE = "truckcar.userId";
     static final String ROLE_ATTRIBUTE = "truckcar.role";
+    /** X-Correlation-Id del handshake: TelemetryTracingInterceptor lo usa en las trazas de los frames de la sesión. */
+    static final String CORRELATION_ATTRIBUTE = "truckcar.correlationId";
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
@@ -28,6 +30,10 @@ public class GatewayIdentityHandshakeInterceptor implements HandshakeInterceptor
         String role = request.getHeaders().getFirst("X-Auth-Role");
         attributes.put(USER_ATTRIBUTE, userId);
         attributes.put(ROLE_ATTRIBUTE, role == null ? "" : role);
+        String correlationId = request.getHeaders().getFirst(TelemetryTracingInterceptor.CORRELATION_HEADER);
+        if (correlationId != null && !correlationId.isBlank()) {
+            attributes.put(CORRELATION_ATTRIBUTE, correlationId);
+        }
         return true;
     }
 

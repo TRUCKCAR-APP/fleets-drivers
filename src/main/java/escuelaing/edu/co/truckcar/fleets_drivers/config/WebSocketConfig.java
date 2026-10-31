@@ -3,6 +3,7 @@ package escuelaing.edu.co.truckcar.fleets_drivers.config;
 import escuelaing.edu.co.truckcar.fleets_drivers.websocket.GatewayIdentityHandshakeInterceptor;
 import escuelaing.edu.co.truckcar.fleets_drivers.websocket.TelemetryChannelInterceptor;
 import escuelaing.edu.co.truckcar.fleets_drivers.websocket.TelemetryHandshakeHandler;
+import escuelaing.edu.co.truckcar.fleets_drivers.websocket.TelemetryTracingInterceptor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
@@ -25,14 +26,17 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final TelemetryChannelInterceptor channelInterceptor;
+    private final TelemetryTracingInterceptor tracingInterceptor;
     private final String[] allowedOriginPatterns;
     private final BrokerRelayProperties relay;
 
     public WebSocketConfig(TelemetryChannelInterceptor channelInterceptor,
+                           TelemetryTracingInterceptor tracingInterceptor,
                            @Value("${truckcar.websocket.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
                            String[] allowedOriginPatterns,
                            BrokerRelayProperties relay) {
         this.channelInterceptor = channelInterceptor;
+        this.tracingInterceptor = tracingInterceptor;
         this.allowedOriginPatterns = allowedOriginPatterns;
         this.relay = relay;
     }
@@ -84,6 +88,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(channelInterceptor);
+        // Primero las reglas de acceso (preSend); la traza se abre al ejecutar el @MessageMapping.
+        registration.interceptors(channelInterceptor, tracingInterceptor);
     }
 }

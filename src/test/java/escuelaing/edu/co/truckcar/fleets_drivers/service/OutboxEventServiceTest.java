@@ -5,11 +5,13 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import escuelaing.edu.co.truckcar.fleets_drivers.model.DriverVehicleState;
 import escuelaing.edu.co.truckcar.fleets_drivers.model.OutboxEvent;
 import escuelaing.edu.co.truckcar.fleets_drivers.repository.OutboxEventRepository;
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 import java.time.LocalDateTime;
 
@@ -19,13 +21,17 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class OutboxEventServiceTest {
 
+    /** Sin Tracer en el contexto: los eventos se guardan sin traceparent. */
+    private static final OutboxTracing NO_TRACING =
+            new OutboxTracing(new StaticListableBeanFactory().getBeanProvider(Tracer.class));
+
     @Mock
     private OutboxEventRepository repository;
 
     @Test
     void enqueuesSerializedAvailabilityEnvelope() {
         OutboxEventService service = new OutboxEventService(repository,
-                new ObjectMapper().registerModule(new JavaTimeModule()));
+                new ObjectMapper().registerModule(new JavaTimeModule()), NO_TRACING);
         DriverVehicleState state = DriverVehicleState.builder()
                 .driverId("driver-1")
                 .vehiclePlate("ABC123")

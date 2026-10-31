@@ -17,11 +17,13 @@ public class LoadOwnershipClient {
 
     private final RestClient restClient;
 
-    public LoadOwnershipClient(@Value("${truckcar.services.load-allocation-url:http://localhost:8083}") String baseUrl) {
+    /** Builder autoconfigurado: la consulta propaga traceparent y X-Correlation-Id y se mide (http.client.requests). */
+    public LoadOwnershipClient(RestClient.Builder builder,
+                               @Value("${truckcar.services.load-allocation-url:http://localhost:8083}") String baseUrl) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(3000);
         factory.setReadTimeout(3000);
-        this.restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+        this.restClient = builder.baseUrl(baseUrl).requestFactory(factory).build();
     }
 
     public boolean isOwnedByGenerator(Long loadId, String generatorUserId) {
