@@ -120,11 +120,21 @@ class FleetDriverControllerAccessTest {
 
     @Test
     void locationLookupsRequireGatewayIdentity() throws Exception {
-        getAs("/api/v1/fleets-drivers/drivers/ana", null, null).andExpect(status().isUnauthorized());
         getAs("/api/v1/fleets-drivers/vehicles/TDK-410", null, null).andExpect(status().isUnauthorized());
         getAs("/api/v1/fleets-drivers/drivers/ana", "ana", null).andExpect(status().isUnauthorized());
         verify(service, never()).getStateByDriverId(any());
         verify(service, never()).getStateByPlate(any());
+    }
+
+    /**
+     * Sin X-Auth-User la petición no viene del api-gateway (responde 401 a todo lo anónimo y siempre fija la identidad):
+     * es el seguimiento público de Load-Allocation pidiendo la última posición del vehículo.
+     */
+    @Test
+    void internalServicesReadADriverStateWithoutUserIdentity() throws Exception {
+        when(service.getStateByDriverId("ana")).thenReturn(DriverVehicleStateResponse.builder().driverId("ana").build());
+
+        getAs("/api/v1/fleets-drivers/drivers/ana", null, null).andExpect(status().isOk());
     }
 
     @ParameterizedTest

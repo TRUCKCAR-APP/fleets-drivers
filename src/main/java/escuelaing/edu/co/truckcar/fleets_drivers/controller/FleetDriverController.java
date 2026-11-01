@@ -59,12 +59,17 @@ public class FleetDriverController {
     /**
      * Estado y ubicación en vivo de un conductor. Lo ven la torre de control (COORDINADOR o ADMIN), el propio CONDUCTOR
      * y un GENERADOR solo si el conductor lleva una de sus cargas (la propiedad la confirma Load-Allocation).
+     * Sin X-Auth-User es una llamada interna entre servicios (el seguimiento público de Load-Allocation): el api-gateway
+     * responde 401 a toda petición sin JWT hacia estas rutas, así que desde fuera nunca llega una petición anónima.
      */
     @GetMapping("/drivers/{driverId}")
     public ResponseEntity<DriverVehicleStateResponse> getByDriver(
             @PathVariable String driverId,
             @RequestHeader(value = AUTH_USER_HEADER, required = false) String authenticatedUserId,
             @RequestHeader(value = AUTH_ROLE_HEADER, required = false) String authenticatedRole) {
+        if (authenticatedUserId == null || authenticatedUserId.isBlank()) {
+            return ResponseEntity.ok(service.getStateByDriverId(driverId));
+        }
         requireIdentity(authenticatedUserId, authenticatedRole);
         // El conductor se valida antes de buscar: así el 404 de "aún sin estado" solo lo recibe el dueño.
         if ("CONDUCTOR".equals(authenticatedRole) && !authenticatedUserId.equals(driverId)) {
