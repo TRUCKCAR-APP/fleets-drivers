@@ -26,6 +26,7 @@ public class DriverVehicleStateResponse {
 
     private Double maxHeightMeters;
     private Double netCargoWeightTons;
+    private Double maxPayloadTons;
     private Double tareWeightTons;
     private Double grossWeightTons;
 
