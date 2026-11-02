@@ -26,6 +26,16 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(PlateAlreadyRegisteredException.class)
+    public ResponseEntity<Map<String, Object>> handlePlateConflict(PlateAlreadyRegisteredException ex) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("timestamp", LocalDateTime.now());
+        error.put("status", HttpStatus.CONFLICT.value());
+        error.put("error", "Placa ya registrada");
+        error.put("message", ex.getMessage());
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(FleetAccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleForbidden(FleetAccessDeniedException ex) {
         Map<String, Object> error = new HashMap<>();
@@ -62,14 +72,15 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    /** El detalle queda en el log: al cliente no se le exponen clases ni mensajes internos. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
         log.error("Excepción interna no controlada: ", ex);
         Map<String, Object> error = new HashMap<>();
         error.put("timestamp", LocalDateTime.now());
         error.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        error.put("error", ex.getClass().getSimpleName());
-        error.put("message", ex.getMessage());
+        error.put("error", "Error interno");
+        error.put("message", "No se pudo procesar la solicitud de la flota");
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

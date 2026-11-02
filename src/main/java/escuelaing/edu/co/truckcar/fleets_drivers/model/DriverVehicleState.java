@@ -36,6 +36,7 @@ public class DriverVehicleState implements Serializable {
 
     private Double maxHeightMeters;
     private Double netCargoWeightTons;
+    private Double maxPayloadTons;
     private Double tareWeightTons;
     private Double grossWeightTons;
 

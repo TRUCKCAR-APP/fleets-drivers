@@ -2,6 +2,7 @@ package escuelaing.edu.co.truckcar.fleets_drivers.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,6 +37,10 @@ public class UpdateDriverVehicleStateRequest {
 
     @PositiveOrZero
     private Double netCargoWeightTons;
+
+    /** Capacidad de carga del vehículo (licencia de tránsito). Sin ella el motor de asignación no lo propone. */
+    @Positive(message = "La capacidad de carga debe ser mayor que 0")
+    private Double maxPayloadTons;
 
     @NotNull(message = "La tara es obligatoria")
     @PositiveOrZero

@@ -4,6 +4,7 @@ import escuelaing.edu.co.truckcar.fleets_drivers.dto.request.UpdateDriverVehicle
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.response.DriverVehicleStateResponse;
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.FleetLocationMessage;
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.LocationUpdateMessage;
+import escuelaing.edu.co.truckcar.fleets_drivers.exception.PlateAlreadyRegisteredException;
 import escuelaing.edu.co.truckcar.fleets_drivers.exception.ResourceNotFoundException;
 import escuelaing.edu.co.truckcar.fleets_drivers.model.DriverVehicleState;
 import escuelaing.edu.co.truckcar.fleets_drivers.repository.DriverVehicleStateRepository;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -37,6 +39,14 @@ public class FleetDriverService implements IFleetDriverService {
     @Override
     @Transactional
     public DriverVehicleStateResponse saveOrUpdateState(UpdateDriverVehicleStateRequest request) {
+        String plate = normalizePlate(request.getVehiclePlate());
+        List<String> owners = repository.findAllByVehiclePlate(plate).stream()
+                .map(DriverVehicleState::getDriverId)
+                .filter(owner -> !owner.equals(request.getDriverId()))
+                .toList();
+        if (!owners.isEmpty()) {
+            throw new PlateAlreadyRegisteredException("La placa " + plate + " ya está registrada en el vehículo de otro conductor");
+        }
         double grossWeight = 0.0;
         if (request.getTareWeightTons() != null) {
             grossWeight += request.getTareWeightTons();
@@ -61,11 +71,12 @@ public class FleetDriverService implements IFleetDriverService {
                 .licenseCategory(request.getLicenseCategory())
                 .rating(request.getRating())
                 .totalTrips(request.getTotalTrips())
-                .vehiclePlate(request.getVehiclePlate())
+                .vehiclePlate(plate)
                 .vehicleModel(request.getVehicleModel())
                 .vehicleType(request.getVehicleType())
                 .maxHeightMeters(request.getMaxHeightMeters())
                 .netCargoWeightTons(request.getNetCargoWeightTons())
+                .maxPayloadTons(request.getMaxPayloadTons())
                 .tareWeightTons(request.getTareWeightTons())
                 .grossWeightTons(grossWeight)
                 .drivingHoursToday(request.getDrivingHoursToday())
@@ -106,7 +117,7 @@ public class FleetDriverService implements IFleetDriverService {
 
     @Override
     public DriverVehicleStateResponse getStateByPlate(String plate) {
-        return repository.findByVehiclePlate(plate)
+        return repository.findAllByVehiclePlate(normalizePlate(plate)).stream().findFirst()
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontró vehículo con placa: " + plate));
     }
@@ -253,6 +264,7 @@ public class FleetDriverService implements IFleetDriverService {
                 .vehicleType(entity.getVehicleType())
                 .maxHeightMeters(entity.getMaxHeightMeters())
                 .netCargoWeightTons(entity.getNetCargoWeightTons())
+                .maxPayloadTons(entity.getMaxPayloadTons())
                 .tareWeightTons(entity.getTareWeightTons())
                 .grossWeightTons(entity.getGrossWeightTons())
                 .drivingHoursToday(entity.getDrivingHoursToday())
@@ -272,5 +284,17 @@ public class FleetDriverService implements IFleetDriverService {
                 .status(entity.getStatus())
                 .lastUpdate(entity.getLastUpdate())
                 .build();
+    }
+
+    /** Placa colombiana de carga (ABC123, "abc 123", "ABC-123"): siempre "ABC-123". Otras, en mayúsculas y sin espacios al borde. */
+    private static final java.util.regex.Pattern COLOMBIAN_PLATE = java.util.regex.Pattern.compile("^([A-Z]{3})[\\s-]*(\\d{2,3}[A-Z]?)$");
+
+    static String normalizePlate(String plate) {
+        if (plate == null) {
+            return null;
+        }
+        String upper = plate.trim().toUpperCase(Locale.ROOT);
+        java.util.regex.Matcher m = COLOMBIAN_PLATE.matcher(upper);
+        return m.matches() ? m.group(1) + "-" + m.group(2) : upper;
     }
 }
