@@ -17,7 +17,10 @@ import java.security.Principal;
 import java.time.Instant;
 import java.util.Map;
 
-/** Recibe la posición GPS de los conductores (/app/telemetry) y la retransmite a la torre y al seguimiento de la carga. */
+/**
+ * Recibe la posición GPS de los conductores (/app/telemetry): la torre la recibe agregada cada pocos segundos
+ * ({@link FleetBroadcaster}), el seguimiento de la carga al instante, y el histórico se escribe por lotes.
+ */
 @Slf4j
 @Controller
 @RequiredArgsConstructor
@@ -27,6 +30,7 @@ public class TelemetryController {
     private final TelemetryAccessPolicy accessPolicy;
     private final SimpMessagingTemplate messagingTemplate;
     private final PositionHistory positionHistory;
+    private final FleetBroadcaster fleetBroadcaster;
 
     @MessageMapping("/telemetry")
     public void receiveLocation(@Payload LocationUpdateMessage update, Principal principal) {
@@ -38,7 +42,7 @@ public class TelemetryController {
         validate(update);
         FleetLocationMessage location = fleetDriverService.recordLocation(update);
         positionHistory.recordLive(update, location.getTimestamp());
-        messagingTemplate.convertAndSend(TelemetryAccessPolicy.FLEET_TOPIC, location);
+        fleetBroadcaster.publish(location);
         if (location.getLoadId() != null) {
             messagingTemplate.convertAndSend(TelemetryAccessPolicy.TRIP_TOPIC_PREFIX + location.getLoadId(), location);
         }

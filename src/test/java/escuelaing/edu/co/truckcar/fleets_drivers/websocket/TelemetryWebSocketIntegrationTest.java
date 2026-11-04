@@ -52,7 +52,7 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.kafka.listener.auto-startup=false")
+        properties = {"spring.kafka.listener.auto-startup=false", "truckcar.telemetry.fleet-broadcast-interval-ms=200"})
 class TelemetryWebSocketIntegrationTest {
 
     @LocalServerPort
@@ -125,6 +125,24 @@ class TelemetryWebSocketIntegrationTest {
         return received;
     }
 
+    /** /topic/fleet-locations envía un arreglo con las posiciones de la ventana. */
+    private static CompletableFuture<List<Map<String, Object>>> subscribeFleet(StompSession session) {
+        CompletableFuture<List<Map<String, Object>>> received = new CompletableFuture<>();
+        session.subscribe(TelemetryAccessPolicy.FLEET_TOPIC, new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return List.class;
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public void handleFrame(StompHeaders headers, Object payload) {
+                received.complete((List<Map<String, Object>>) payload);
+            }
+        });
+        return received;
+    }
+
     /**
      * Espera de forma determinista el rechazo del servidor: la sesión siempre termina cerrada y el motivo siempre queda
      * en el log. Si el ERROR llegó (antes del cierre), también debe traer el motivo.
@@ -149,15 +167,16 @@ class TelemetryWebSocketIntegrationTest {
                 .driverId("ana").vehiclePlate("TDK-410").latitude(4.61).longitude(-74.08).speedKmH(62.0)
                 .heading(210.0).loadId(30L).loadStatus("IN_TRANSIT").timestamp(Instant.now()).build());
         StompSession tower = connect("coord-1", "COORDINADOR", null);
-        CompletableFuture<Map<String, Object>> fleet = subscribe(tower, "/topic/fleet-locations");
+        CompletableFuture<List<Map<String, Object>>> fleet = subscribeFleet(tower);
         CompletableFuture<Map<String, Object>> trip = subscribe(tower, "/topic/trip.30");
         Thread.sleep(300);
 
         connect("ana", "CONDUCTOR", null).send("/app/telemetry", position("ana"));
 
-        Map<String, Object> received = fleet.get(5, TimeUnit.SECONDS);
-        assertThat(received).containsEntry("driverId", "ana").containsEntry("vehiclePlate", "TDK-410");
-        assertThat(received.get("latitude")).isEqualTo(4.61);
+        List<Map<String, Object>> received = fleet.get(5, TimeUnit.SECONDS);
+        assertThat(received).hasSize(1);
+        assertThat(received.get(0)).containsEntry("driverId", "ana").containsEntry("vehiclePlate", "TDK-410");
+        assertThat(received.get(0).get("latitude")).isEqualTo(4.61);
         assertThat(trip.get(5, TimeUnit.SECONDS)).containsEntry("loadStatus", "IN_TRANSIT");
     }
 

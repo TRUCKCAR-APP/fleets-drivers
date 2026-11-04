@@ -6,6 +6,7 @@ import escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.LocationUpdateMes
 import escuelaing.edu.co.truckcar.fleets_drivers.exception.ResourceNotFoundException;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.IFleetDriverService;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.PositionHistory;
+import escuelaing.edu.co.truckcar.fleets_drivers.websocket.FleetBroadcaster;
 import escuelaing.edu.co.truckcar.fleets_drivers.websocket.TelemetryAccessPolicy;
 import escuelaing.edu.co.truckcar.fleets_drivers.websocket.TelemetryController;
 import escuelaing.edu.co.truckcar.fleets_drivers.websocket.TelemetryRejectedException;
@@ -38,14 +39,17 @@ public class FleetSyncService {
     private final PositionHistory history;
     private final IFleetDriverService fleetDriverService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final FleetBroadcaster fleetBroadcaster;
     private final TransactionTemplate transaction;
 
     public FleetSyncService(IngestionLedger ledger, PositionHistory history, IFleetDriverService fleetDriverService,
-                            SimpMessagingTemplate messagingTemplate, PlatformTransactionManager transactionManager) {
+                            SimpMessagingTemplate messagingTemplate, FleetBroadcaster fleetBroadcaster,
+                            PlatformTransactionManager transactionManager) {
         this.ledger = ledger;
         this.history = history;
         this.fleetDriverService = fleetDriverService;
         this.messagingTemplate = messagingTemplate;
+        this.fleetBroadcaster = fleetBroadcaster;
         this.transaction = new TransactionTemplate(transactionManager);
     }
 
@@ -101,7 +105,7 @@ public class FleetSyncService {
             return;
         }
         live.ifPresent(location -> {
-            messagingTemplate.convertAndSend(TelemetryAccessPolicy.FLEET_TOPIC, location);
+            fleetBroadcaster.publish(location);
             if (location.getLoadId() != null) {
                 messagingTemplate.convertAndSend(TelemetryAccessPolicy.TRIP_TOPIC_PREFIX + location.getLoadId(), location);
             }

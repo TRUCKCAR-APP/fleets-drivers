@@ -13,6 +13,10 @@ spring:
     # Sin valor por defecto: fuera de Docker se define DB_PASSWORD (en el CI, el de su PostgreSQL efímero).
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        # El histórico en vivo se escribe por lotes (PositionHistory): el driver los envía como un solo INSERT multi-fila.
+        reWriteBatchedInserts: true
 
   jpa:
     hibernate:
@@ -72,6 +76,14 @@ truckcar:
   outbox:
     publish-interval-ms: ${TRUCKCAR_OUTBOX_PUBLISH_INTERVAL_MS:1000}
     batch-size: ${TRUCKCAR_OUTBOX_BATCH_SIZE:100}
+  telemetry:
+    # La torre recibe un solo mensaje con las posiciones que cambiaron en la ventana (FleetBroadcaster).
+    fleet-broadcast-interval-ms: ${TRUCKCAR_FLEET_BROADCAST_INTERVAL_MS:3000}
+    # Histórico en vivo por lotes (PositionHistory); si la cola se llena, se descartan posiciones y se cuentan.
+    history:
+      flush-interval-ms: ${TRUCKCAR_HISTORY_FLUSH_INTERVAL_MS:3000}
+      batch-size: ${TRUCKCAR_HISTORY_BATCH_SIZE:1000}
+      buffer-capacity: ${TRUCKCAR_HISTORY_BUFFER_CAPACITY:50000}
 # ── Observabilidad ──────────────────────────────────────────────────────────────────────────────
 # /actuator/prometheus solo es accesible dentro de la red interna: el api-gateway no enruta /actuator/**.
 # Las trazas se exportan por OTLP al otel-collector cuando se define MANAGEMENT_OTLP_TRACING_ENDPOINT (en Docker,

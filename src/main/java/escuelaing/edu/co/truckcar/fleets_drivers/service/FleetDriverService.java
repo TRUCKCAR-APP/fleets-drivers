@@ -30,6 +30,7 @@ public class FleetDriverService implements IFleetDriverService {
 
     private final DriverVehicleStateRepository repository;
     private final OutboxEventService outboxEventService;
+    private final LivePositionStore livePositions;
 
     private static final Set<String> COMMITTED_LOAD_STATUSES = Set.of("ASSIGNED", "IN_TRANSIT");
 
@@ -180,8 +181,13 @@ public class FleetDriverService implements IFleetDriverService {
             state.setCurrentHeading(update.getHeading());
         }
         state.setLastUpdate(now);
-        // Telemetría frecuente: se guarda la posición sin encolar un evento de disponibilidad por cada punto.
-        repository.save(state);
+        // Telemetría frecuente: HSET de los campos de posición, sin reescribir el hash ni encolar un evento de
+        // disponibilidad por cada punto.
+        if (!livePositions.updatePosition(state.getDriverId(), state.getCurrentLatitude(), state.getCurrentLongitude(),
+                state.getCurrentSpeedKmH(), state.getCurrentHeading(), now)) {
+            throw new ResourceNotFoundException("El conductor " + state.getDriverId()
+                    + " no tiene vehículo registrado en la flota");
+        }
 
         // Solo se asocia la posición a una carga si es una carga activa del conductor (ASSIGNED/IN_TRANSIT).
         Map<String, String> active = activeLoadsOf(state);
