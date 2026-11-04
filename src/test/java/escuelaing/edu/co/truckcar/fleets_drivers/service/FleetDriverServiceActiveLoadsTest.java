@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,13 +35,17 @@ class FleetDriverServiceActiveLoadsTest {
     @Mock
     private OutboxEventService outboxEventService;
 
+    @Mock
+    private LivePositionStore livePositions;
+
     private FleetDriverService service;
 
     @BeforeEach
     void setUp() {
-        service = new FleetDriverService(repository, outboxEventService);
+        service = new FleetDriverService(repository, outboxEventService, livePositions);
         ReflectionTestUtils.setField(service, "maxDailyDrivingHours", 9.0);
         when(repository.save(any(DriverVehicleState.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(livePositions.updatePosition(any(), any(), any(), any(), any(), any())).thenReturn(true);
     }
 
     private DriverVehicleState driver(String id, String status, Map<String, String> activeLoads) {
@@ -147,6 +152,20 @@ class FleetDriverServiceActiveLoadsTest {
         assertThat(onTrip.getLoadStatus()).isEqualTo("IN_TRANSIT");
         assertThat(otherLoad.getLoadId()).isNull();
         verify(outboxEventService, never()).enqueueAvailabilityEvent(any());
+        // Solo los campos de posición (HSET): el hash completo no se reescribe por cada punto.
+        verify(livePositions).updatePosition(eq("ana"), eq(4.8), eq(-74.3), eq(55.0), eq(180.0), any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void aPositionForADriverRemovedMeanwhileFails() {
+        driver("ana", "ACTIVO", Map.of());
+        when(livePositions.updatePosition(eq("ana"), any(), any(), any(), any(), any())).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.recordLocation(
+                escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.LocationUpdateMessage.builder()
+                        .driverId("ana").latitude(4.7).longitude(-74.2).build()))
+                .isInstanceOf(escuelaing.edu.co.truckcar.fleets_drivers.exception.ResourceNotFoundException.class);
     }
 
     @Test
