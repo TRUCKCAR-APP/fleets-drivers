@@ -48,13 +48,16 @@ public class FleetDriverService implements IFleetDriverService {
         if (!owners.isEmpty()) {
             throw new PlateAlreadyRegisteredException("La placa " + plate + " ya está registrada en el vehículo de otro conductor");
         }
-        double grossWeight = 0.0;
-        if (request.getTareWeightTons() != null) {
-            grossWeight += request.getTareWeightTons();
-        }
-        if (request.getNetCargoWeightTons() != null) {
-            grossWeight += request.getNetCargoWeightTons();
-        }
+        // Con cargas en tránsito, la carga a bordo sale de sus pesos (eventos de Load-Allocation): el formulario de la
+        // torre no la conoce y no debe dejar el camión "vacío" a mitad de viaje.
+        DriverVehicleState existing = repository.findById(request.getDriverId()).orElse(null);
+        Map<String, String> activeLoads = existing == null ? new HashMap<>() : activeLoadsOf(existing);
+        Map<String, Double> loadWeights = existing == null ? new HashMap<>() : loadWeightsOf(existing);
+        // Double.valueOf: con un double en una rama, el ternario desempacaría el null del formulario (NPE).
+        Double netCargo = hasLoadOnBoard(activeLoads, loadWeights)
+                ? Double.valueOf(onBoardTons(activeLoads, loadWeights))
+                : request.getNetCargoWeightTons();
+        double grossWeight = grossTons(request.getTareWeightTons(), netCargo);
 
         double remainingHours = this.maxDailyDrivingHours;
         boolean restAlert = false;
@@ -76,7 +79,7 @@ public class FleetDriverService implements IFleetDriverService {
                 .vehicleModel(request.getVehicleModel())
                 .vehicleType(request.getVehicleType())
                 .maxHeightMeters(request.getMaxHeightMeters())
-                .netCargoWeightTons(request.getNetCargoWeightTons())
+                .netCargoWeightTons(netCargo)
                 .maxPayloadTons(request.getMaxPayloadTons())
                 .tareWeightTons(request.getTareWeightTons())
                 .grossWeightTons(grossWeight)
@@ -93,12 +96,12 @@ public class FleetDriverService implements IFleetDriverService {
                 .currentLatitude(request.getCurrentLatitude())
                 .currentLongitude(request.getCurrentLongitude())
                 .currentSpeedKmH(request.getCurrentSpeedKmH())
-                .status(request.getStatus() != null ? request.getStatus() : "ACTIVO")
+                .status(request.getStatus() != null ? request.getStatus().toUpperCase(java.util.Locale.ROOT) : "ACTIVO")
                 .lastUpdate(now)
                 .build();
         // El formulario no conoce las cargas ni el rumbo GPS: se conservan los que ya estaban registrados.
-        DriverVehicleState existing = repository.findById(request.getDriverId()).orElse(null);
-        entity.setActiveLoads(existing == null ? new HashMap<>() : activeLoadsOf(existing));
+        entity.setActiveLoads(activeLoads);
+        entity.setActiveLoadWeights(loadWeights);
         entity.setCurrentHeading(existing == null ? null : existing.getCurrentHeading());
 
         DriverVehicleState saved = repository.save(entity);
@@ -225,6 +228,15 @@ public class FleetDriverService implements IFleetDriverService {
 
     @Override
     public boolean applyLoadStatus(String driverId, Long loadId, String loadStatus) {
+        return applyLoadStatus(driverId, loadId, loadStatus, null);
+    }
+
+    /**
+     * Estado de una carga del conductor y, si el evento lo trae, su peso. Al subir a IN_TRANSIT la carga cuenta como
+     * carga a bordo (netCargoWeightTons) y en el peso bruto; al entregarse o cancelarse deja de contar.
+     */
+    @Override
+    public boolean applyLoadStatus(String driverId, Long loadId, String loadStatus, Double weightTons) {
         if (driverId == null || loadId == null || loadStatus == null) {
             return false;
         }
@@ -234,21 +246,57 @@ public class FleetDriverService implements IFleetDriverService {
             return false;
         }
         Map<String, String> active = activeLoadsOf(state);
+        Map<String, Double> weights = loadWeightsOf(state);
         String key = loadId.toString();
-        boolean changed = COMMITTED_LOAD_STATUSES.contains(loadStatus)
-                ? !loadStatus.equals(active.put(key, loadStatus))
-                : active.remove(key) != null;
+        boolean changed;
+        if (COMMITTED_LOAD_STATUSES.contains(loadStatus)) {
+            changed = !loadStatus.equals(active.put(key, loadStatus));
+            if (weightTons != null && weightTons >= 0) {
+                changed |= !weightTons.equals(weights.put(key, weightTons));
+            }
+        } else {
+            changed = active.remove(key) != null;
+            changed |= weights.remove(key) != null;
+        }
         if (!changed) {
             return false;
         }
         state.setActiveLoads(active);
+        state.setActiveLoadWeights(weights);
+        double onBoard = onBoardTons(active, weights);
+        state.setNetCargoWeightTons(onBoard);
+        state.setGrossWeightTons(grossTons(state.getTareWeightTons(), onBoard));
         repository.save(state);
-        log.info("Conductor {}: carga #{} -> {}; cargas activas {}", driverId, loadId, loadStatus, active);
+        log.info("Conductor {}: carga #{} -> {}; cargas activas {}; a bordo {} t", driverId, loadId, loadStatus, active, onBoard);
         return true;
     }
 
     private Map<String, String> activeLoadsOf(DriverVehicleState state) {
         return state.getActiveLoads() == null ? new HashMap<>() : new HashMap<>(state.getActiveLoads());
+    }
+
+    private Map<String, Double> loadWeightsOf(DriverVehicleState state) {
+        return state.getActiveLoadWeights() == null ? new HashMap<>() : new HashMap<>(state.getActiveLoadWeights());
+    }
+
+    /** Toneladas a bordo: las cargas IN_TRANSIT con peso conocido (una carga aceptada aún no se ha subido). */
+    static double onBoardTons(Map<String, String> activeLoads, Map<String, Double> weights) {
+        double tons = activeLoads.entrySet().stream()
+                .filter(e -> "IN_TRANSIT".equals(e.getValue()))
+                .map(e -> weights.get(e.getKey()))
+                .filter(java.util.Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+        return Math.round(tons * 1000.0) / 1000.0;
+    }
+
+    private static boolean hasLoadOnBoard(Map<String, String> activeLoads, Map<String, Double> weights) {
+        return activeLoads.entrySet().stream()
+                .anyMatch(e -> "IN_TRANSIT".equals(e.getValue()) && weights.containsKey(e.getKey()));
+    }
+
+    private static double grossTons(Double tareTons, Double netCargoTons) {
+        return (tareTons == null ? 0.0 : tareTons) + (netCargoTons == null ? 0.0 : netCargoTons);
     }
 
     private DriverVehicleStateResponse mapToResponse(DriverVehicleState entity) {

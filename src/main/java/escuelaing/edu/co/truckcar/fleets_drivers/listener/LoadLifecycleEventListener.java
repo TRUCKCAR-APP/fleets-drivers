@@ -39,7 +39,10 @@ public class LoadLifecycleEventListener {
         if (driverId == null || loadId == null || loadStatus == null) {
             return;
         }
-        fleetDriverService.applyLoadStatus(driverId, loadId, loadStatus);
+        // weightTons: el peso de la carga, que cuenta como carga a bordo mientras está IN_TRANSIT.
+        JsonNode weight = payload.get("weightTons");
+        Double weightTons = weight != null && weight.isNumber() ? weight.asDouble() : null;
+        fleetDriverService.applyLoadStatus(driverId, loadId, loadStatus, weightTons);
     }
 
     private static String text(JsonNode node, String field) {

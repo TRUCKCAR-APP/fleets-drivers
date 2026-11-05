@@ -118,6 +118,67 @@ class FleetDriverServiceActiveLoadsTest {
     }
 
     @Test
+    void theLoadCountsOnBoardOnlyWhileInTransit() {
+        DriverVehicleState ana = driver("ana", "ACTIVO", Map.of());
+        ana.setTareWeightTons(3.5);
+        ana.setNetCargoWeightTons(0.0);
+        ana.setGrossWeightTons(3.5);
+
+        service.applyLoadStatus("ana", 10L, "ASSIGNED", 2.5);
+        assertThat(ana.getNetCargoWeightTons()).as("aceptada: aún no se ha subido").isEqualTo(0.0);
+        assertThat(ana.getGrossWeightTons()).isEqualTo(3.5);
+
+        service.applyLoadStatus("ana", 10L, "IN_TRANSIT", 2.5);
+        assertThat(ana.getNetCargoWeightTons()).isEqualTo(2.5);
+        assertThat(ana.getGrossWeightTons()).as("tara + carga a bordo").isEqualTo(6.0);
+        assertThat(service.getStateByDriverId("ana").getGrossWeightTons()).isEqualTo(6.0);
+
+        service.applyLoadStatus("ana", 10L, "DELIVERED", 2.5);
+        assertThat(ana.getNetCargoWeightTons()).isEqualTo(0.0);
+        assertThat(ana.getGrossWeightTons()).isEqualTo(3.5);
+        assertThat(ana.getActiveLoadWeights()).isEmpty();
+    }
+
+    @Test
+    void twoLoadsInTransitAddUpAndAnEventWithoutWeightKeepsTheKnownOne() {
+        DriverVehicleState ana = driver("ana", "ACTIVO", Map.of());
+        ana.setTareWeightTons(8.0);
+
+        service.applyLoadStatus("ana", 10L, "IN_TRANSIT", 4.0);
+        service.applyLoadStatus("ana", 11L, "IN_TRANSIT", 1.25);
+        assertThat(ana.getNetCargoWeightTons()).isEqualTo(5.25);
+        assertThat(service.applyLoadStatus("ana", 11L, "IN_TRANSIT", null)).as("evento repetido sin peso").isFalse();
+        assertThat(ana.getGrossWeightTons()).isEqualTo(13.25);
+    }
+
+    @Test
+    void theTowerFormDoesNotEmptyATruckInTransit() {
+        DriverVehicleState ana = driver("ana", "ACTIVO", Map.of("10", "IN_TRANSIT"));
+        ana.setActiveLoadWeights(new HashMap<>(Map.of("10", 2.5)));
+        UpdateDriverVehicleStateRequest form = UpdateDriverVehicleStateRequest.builder()
+                .driverId("ana").vehiclePlate("P-ana").maxHeightMeters(3.4).tareWeightTons(3.5)
+                .netCargoWeightTons(0.0).status("ACTIVO").build();
+
+        DriverVehicleStateResponse response = service.saveOrUpdateState(form);
+
+        assertThat(response.getNetCargoWeightTons()).isEqualTo(2.5);
+        assertThat(response.getGrossWeightTons()).isEqualTo(6.0);
+    }
+
+    @Test
+    void withoutLoadsInTransitTheFormValueIsKept() {
+        driver("ana", "ACTIVO", Map.of());
+        UpdateDriverVehicleStateRequest form = UpdateDriverVehicleStateRequest.builder()
+                .driverId("ana").vehiclePlate("P-ana").maxHeightMeters(3.4).tareWeightTons(3.5)
+                .netCargoWeightTons(1.0).status("activo").build();
+
+        DriverVehicleStateResponse response = service.saveOrUpdateState(form);
+
+        assertThat(response.getGrossWeightTons()).isEqualTo(4.5);
+        assertThat(response.getStatus()).as("se normaliza a mayúsculas").isEqualTo("ACTIVO");
+    }
+
+    @Test
     void telemetryUpdateKeepsTheActiveLoads() {
         driver("ana", "ACTIVO", Map.of("10", "IN_TRANSIT"));
         UpdateDriverVehicleStateRequest telemetry = UpdateDriverVehicleStateRequest.builder()
