@@ -14,6 +14,8 @@ public interface IFleetDriverService {
     List<DriverVehicleStateResponse> getAllActiveVehicles();
     List<DriverVehicleStateResponse> getAvailableForNewLoad();
     boolean applyLoadStatus(String driverId, Long loadId, String loadStatus);
+    /** Igual que el anterior, con el peso de la carga (t) para la carga a bordo y el peso bruto; null si no se conoce. */
+    boolean applyLoadStatus(String driverId, Long loadId, String loadStatus, Double weightTons);
     /** Telemetría GPS: actualiza la posición del conductor y devuelve el mensaje a retransmitir. */
     FleetLocationMessage recordLocation(LocationUpdateMessage update);
     /** Posición sincronizada desde la cola offline; vacío si el estado vivo ya es más reciente. */

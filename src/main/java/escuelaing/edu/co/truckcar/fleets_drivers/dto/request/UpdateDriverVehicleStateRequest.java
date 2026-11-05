@@ -2,6 +2,7 @@ package escuelaing.edu.co.truckcar.fleets_drivers.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
@@ -60,5 +61,11 @@ public class UpdateDriverVehicleStateRequest {
     private Double currentLatitude;
     private Double currentLongitude;
     private Double currentSpeedKmH;
+    /**
+     * ACTIVO (recibe cargas) o INACTIVO; sin valor queda ACTIVO. "Disponible", "En tránsito" y "En descanso" son
+     * etiquetas que la PWA deriva de ACTIVO, no estados: con otro valor el motor de asignación nunca propondría cargas.
+     */
+    @Pattern(regexp = "(?i)ACTIVO|INACTIVO",
+            message = "El estado debe ser ACTIVO (recibe cargas) o INACTIVO; Disponible y En tránsito se derivan de ACTIVO")
     private String status;
 }

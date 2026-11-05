@@ -63,4 +63,11 @@ public class DriverVehicleState implements Serializable {
     /** Cargas activas del conductor (loadId -> ASSIGNED | IN_TRANSIT), derivadas de los eventos de Load-Allocation. */
     @Builder.Default
     private Map<String, String> activeLoads = new HashMap<>();
+
+    /**
+     * Peso en toneladas de cada carga activa (loadId -> t), del evento de Load-Allocation. La carga a bordo
+     * (netCargoWeightTons) es la suma de las que están IN_TRANSIT.
+     */
+    @Builder.Default
+    private Map<String, Double> activeLoadWeights = new HashMap<>();
 }
