@@ -38,11 +38,14 @@ class FleetDriverServiceActiveLoadsTest {
     @Mock
     private LivePositionStore livePositions;
 
+    @Mock
+    private AccountStatusStore accountStatuses;
+
     private FleetDriverService service;
 
     @BeforeEach
     void setUp() {
-        service = new FleetDriverService(repository, outboxEventService, livePositions);
+        service = new FleetDriverService(repository, outboxEventService, livePositions, accountStatuses);
         ReflectionTestUtils.setField(service, "maxDailyDrivingHours", 9.0);
         when(repository.save(any(DriverVehicleState.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(livePositions.updatePosition(any(), any(), any(), any(), any(), any())).thenReturn(true);
@@ -101,10 +104,34 @@ class FleetDriverServiceActiveLoadsTest {
         DriverVehicleState inTransit = driver("en-ruta", "ACTIVO", Map.of("6", "IN_TRANSIT"));
         DriverVehicleState inactive = driver("inactivo", "INACTIVO", Map.of());
         when(repository.findAll()).thenReturn(List.of(free, assigned, inTransit, inactive));
+        when(accountStatuses.isVerified(any())).thenReturn(true);
 
         assertThat(service.getAvailableForNewLoad()).extracting(DriverVehicleStateResponse::getDriverId)
                 .containsExactly("libre");
         assertThat(service.getAllActiveVehicles()).hasSize(4);
+    }
+
+    @Test
+    void anUnverifiedAccountIsNeverAvailableAndTheResponseSaysWhy() {
+        DriverVehicleState verified = driver("verificado", "ACTIVO", Map.of());
+        DriverVehicleState pending = driver("pendiente", "ACTIVO", Map.of());
+        DriverVehicleState unknown = driver("sin-evento", "ACTIVO", Map.of());
+        when(repository.findAll()).thenReturn(List.of(verified, pending, unknown));
+        when(accountStatuses.isVerified("verificado")).thenReturn(true);
+        when(accountStatuses.isVerified("pendiente")).thenReturn(false);
+        when(accountStatuses.isVerified("sin-evento")).thenReturn(false);
+        when(accountStatuses.get("verificado")).thenReturn("ACTIVE");
+        when(accountStatuses.get("pendiente")).thenReturn("PENDING_VERIFICATION");
+
+        assertThat(service.getAvailableForNewLoad()).extracting(DriverVehicleStateResponse::getDriverId)
+                .containsExactly("verificado");
+        assertThat(service.getAllActiveVehicles())
+                .extracting(DriverVehicleStateResponse::getDriverId, DriverVehicleStateResponse::getAccountStatus,
+                        DriverVehicleStateResponse::isAccountVerified)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("verificado", "ACTIVE", true),
+                        org.assertj.core.groups.Tuple.tuple("pendiente", "PENDING_VERIFICATION", false),
+                        org.assertj.core.groups.Tuple.tuple("sin-evento", null, false));
     }
 
     @Test
