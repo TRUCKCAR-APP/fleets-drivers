@@ -55,4 +55,10 @@ public class DriverVehicleStateResponse {
     private String currentLoadStatus;
     /** true si tiene una carga aceptada o en ruta: no debe recibir otra. */
     private boolean onTrip;
+
+    /** Estado de la cuenta en user-identity (ACTIVE, PENDING_VERIFICATION, SUSPENDED); null si aún no se conoce. */
+    private String accountStatus;
+
+    /** Cuenta verificada por un administrador (ACTIVE): sin esto el conductor no entra al matching. */
+    private boolean accountVerified;
 }
