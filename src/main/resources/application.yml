@@ -8,10 +8,10 @@ spring:
   datasource:
     # Fuera de Docker (IDE/tests) la conexión es directa y el esquema va en currentSchema. En Docker se pasa por
     # PgBouncer y el search_path lo fija el rol del servicio.
-    url: jdbc:postgresql://localhost:5432/truckcar_db?currentSchema=fleets_drivers,public
+    url: jdbc:postgresql://localhost:5433/truckcar_db?currentSchema=fleets_drivers,public
     username: ${DB_USER:truckcar_admin}
     # AQUI ESTA EL CAMBIO: Se define truckcar_password como valor por defecto
-    password: ${DB_PASSWORD:truckcar_password}
+    password: ${DB_PASSWORD:truckcar}
     driver-class-name: org.postgresql.Driver
     hikari:
       data-source-properties:
