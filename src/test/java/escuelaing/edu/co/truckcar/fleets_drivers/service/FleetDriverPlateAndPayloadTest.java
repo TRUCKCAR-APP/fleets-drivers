@@ -39,11 +39,14 @@ class FleetDriverPlateAndPayloadTest {
     @Mock
     private LivePositionStore livePositions;
 
+    @Mock
+    private AccountStatusStore accountStatuses;
+
     private FleetDriverService service;
 
     @BeforeEach
     void setUp() {
-        service = new FleetDriverService(repository, outboxEventService, livePositions);
+        service = new FleetDriverService(repository, outboxEventService, livePositions, accountStatuses);
         ReflectionTestUtils.setField(service, "maxDailyDrivingHours", 9.0);
         when(repository.save(any(DriverVehicleState.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(repository.findById(anyString())).thenReturn(Optional.empty());
