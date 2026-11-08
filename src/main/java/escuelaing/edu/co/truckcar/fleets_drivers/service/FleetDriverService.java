@@ -62,8 +62,7 @@ public class FleetDriverService implements IFleetDriverService {
         double remainingHours = this.maxDailyDrivingHours;
         boolean restAlert = false;
         if (request.getDrivingHoursToday() != null) {
-            remainingHours = Math.max(0.0, this.maxDailyDrivingHours - request.getDrivingHoursToday());
-            remainingHours = Math.round(remainingHours * 10.0) / 10.0;
+            remainingHours = Math.max(0.0, this.maxDailyDrivingHours - request.getDrivingHoursToday());            remainingHours = Math.round(remainingHours * 10.0) / 10.0;
             restAlert = remainingHours <= 2.0;
         }
 
