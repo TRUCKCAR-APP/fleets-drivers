@@ -8,10 +8,12 @@ spring:
   datasource:
     # Fuera de Docker (IDE/tests) la conexión es directa y el esquema va en currentSchema. En Docker se pasa por
     # PgBouncer y el search_path lo fija el rol del servicio.
-    url: jdbc:postgresql://localhost:5433/truckcar_db?currentSchema=fleets_drivers,public
+    # DB_URL permite apuntar a otro puerto sin tocar el código; p. ej. con el docker-compose.yml de este repo
+    # (PostgreSQL publicado en 5433): DB_URL=jdbc:postgresql://localhost:5433/truckcar_db?currentSchema=fleets_drivers,public
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/truckcar_db?currentSchema=fleets_drivers,public}
     username: ${DB_USER:truckcar_admin}
-    # AQUI ESTA EL CAMBIO: Se define truckcar_password como valor por defecto
-    password: ${DB_PASSWORD:truckcar}
+    # Sin valor por defecto: fuera de Docker se define DB_PASSWORD (en el CI, el de su PostgreSQL efímero).
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
       data-source-properties:
