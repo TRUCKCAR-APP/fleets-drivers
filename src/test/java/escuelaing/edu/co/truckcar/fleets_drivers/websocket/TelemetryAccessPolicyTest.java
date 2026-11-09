@@ -69,4 +69,12 @@ class TelemetryAccessPolicyTest {
         assertThat(policy.canSubscribe(ANA, "/user/queue/errors")).isTrue();
         assertThat(policy.canSubscribe(null, "/user/queue/errors")).isFalse();
     }
+
+    @Test
+    void roadBlockagesReachDriversAndTheTowerButNotGenerators() {
+        assertThat(policy.canSubscribe(ANA, TelemetryAccessPolicy.ROAD_BLOCKAGES_TOPIC)).isTrue();
+        assertThat(policy.canSubscribe(COORD, TelemetryAccessPolicy.ROAD_BLOCKAGES_TOPIC)).isTrue();
+        assertThat(policy.canSubscribe(new TelemetryPrincipal("a", "ADMIN"), "/topic/road-blockages")).isTrue();
+        assertThat(policy.canSubscribe(GEN, "/topic/road-blockages")).isFalse();
+    }
 }
