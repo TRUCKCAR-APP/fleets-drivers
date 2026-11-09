@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
  *   <li>Publicar: un CONDUCTOR solo su propio driverId; COORDINADOR/ADMIN cualquiera (simulación); nadie más.</li>
  *   <li>/topic/fleet-locations: solo la torre de control (COORDINADOR/ADMIN), igual que GET /fleets-drivers/active.</li>
  *   <li>/topic/trip.{loadId}: torre de control, el conductor con esa carga activa o el GENERADOR dueño de la carga.</li>
+ *   <li>/topic/road-blockages: bloqueos viales detectados por la IA (route-ai-agent); conductores y torre de control.</li>
  *   <li>/user/queue/errors: cualquier sesión (errores propios).</li>
  * </ul>
  */
@@ -23,6 +24,7 @@ public class TelemetryAccessPolicy {
 
     public static final String FLEET_TOPIC = "/topic/fleet-locations";
     public static final String TRIP_TOPIC_PREFIX = "/topic/trip.";
+    public static final String ROAD_BLOCKAGES_TOPIC = "/topic/road-blockages";
     public static final String ERRORS_QUEUE = "/user/queue/errors";
 
     private static final Set<String> CONTROL_TOWER = Set.of("COORDINADOR", "ADMIN");
@@ -52,6 +54,9 @@ public class TelemetryAccessPolicy {
         boolean controlTower = CONTROL_TOWER.contains(principal.role());
         if (FLEET_TOPIC.equals(destination)) {
             return controlTower;
+        }
+        if (ROAD_BLOCKAGES_TOPIC.equals(destination)) {
+            return controlTower || "CONDUCTOR".equals(principal.role());
         }
         Matcher trip = TRIP_TOPIC.matcher(destination);
         if (!trip.matches()) {
