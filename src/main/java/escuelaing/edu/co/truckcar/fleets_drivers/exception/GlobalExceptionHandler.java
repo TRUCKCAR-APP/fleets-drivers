@@ -85,6 +85,11 @@ public class GlobalExceptionHandler {
                 "El cuerpo debe ser JSON válido en UTF-8 con los campos y valores esperados");
     }
 
+    @ExceptionHandler(LoadAllocationUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleLoadAllocationUnavailable(LoadAllocationUnavailableException ex) {
+        return clientError(HttpStatus.SERVICE_UNAVAILABLE, "Servicio no disponible", ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         return clientError(HttpStatus.BAD_REQUEST, "Parámetro inválido", ex.getName() + ": valor con un tipo incorrecto");
