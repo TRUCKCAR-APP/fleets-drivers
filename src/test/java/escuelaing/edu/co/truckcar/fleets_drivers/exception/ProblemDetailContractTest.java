@@ -74,6 +74,7 @@ class ProblemDetailContractTest {
                         .content("{\"vehiclePlate\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.details.vehiclePlate").value("La placa del vehículo es obligatoria"))
+                .andExpect(jsonPath("$.errors[0].field").value("vehiclePlate"))
                 .andExpect(jsonPath("$.message").value("La placa del vehículo es obligatoria"));
     }
 }
