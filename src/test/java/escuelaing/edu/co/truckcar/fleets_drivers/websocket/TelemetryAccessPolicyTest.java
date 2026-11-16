@@ -63,6 +63,11 @@ class TelemetryAccessPolicyTest {
         assertThat(policy.canSubscribe(COORD, "/topic/trip.abc")).isFalse();
         assertThat(policy.canSubscribe(COORD, "/topic/otra-cosa")).isFalse();
         assertThat(policy.canSubscribe(COORD, "/topic/trip.30.extra")).isFalse();
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.30.status.extra")).isFalse();
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.30status")).isFalse();
+        // Comodines de RabbitMQ: nadie se suscribe a todas las cargas a la vez.
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.*.status")).isFalse();
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.#")).isFalse();
         // El "." es literal: la forma antigua /topic/trip/{id} y cualquier otro separador quedan fuera.
         assertThat(policy.canSubscribe(COORD, "/topic/trip/30")).isFalse();
         assertThat(policy.canSubscribe(COORD, "/topic/tripX30")).isFalse();
@@ -76,5 +81,20 @@ class TelemetryAccessPolicyTest {
         assertThat(policy.canSubscribe(COORD, TelemetryAccessPolicy.ROAD_BLOCKAGES_TOPIC)).isTrue();
         assertThat(policy.canSubscribe(new TelemetryPrincipal("a", "ADMIN"), "/topic/road-blockages")).isTrue();
         assertThat(policy.canSubscribe(GEN, "/topic/road-blockages")).isFalse();
+    }
+
+    /** KAN-47: los cambios de estado de una carga tienen el mismo permiso que sus posiciones. */
+    @Test
+    void statusTopicFollowsTheSameRulesAsTheTripTopic() {
+        when(fleet.isActiveLoadOf("ana", 30L)).thenReturn(true);
+        when(ownership.isOwnedByGenerator(30L, "gen-1")).thenReturn(true);
+
+        assertThat(policy.canSubscribe(COORD, "/topic/trip.30.status")).isTrue();
+        assertThat(policy.canSubscribe(new TelemetryPrincipal("a", "ADMIN"), "/topic/trip.30.status")).isTrue();
+        assertThat(policy.canSubscribe(ANA, "/topic/trip.30.status")).isTrue();
+        assertThat(policy.canSubscribe(ANA, "/topic/trip.31.status")).isFalse();
+        assertThat(policy.canSubscribe(GEN, "/topic/trip.30.status")).isTrue();
+        assertThat(policy.canSubscribe(GEN, "/topic/trip.31.status")).as("carga de otra empresa").isFalse();
+        assertThat(policy.canSubscribe(new TelemetryPrincipal("x", "OTRO"), "/topic/trip.30.status")).isFalse();
     }
 }

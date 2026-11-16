@@ -2,6 +2,7 @@ package escuelaing.edu.co.truckcar.fleets_drivers.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.IFleetDriverService;
+import escuelaing.edu.co.truckcar.fleets_drivers.websocket.LoadStatusBroadcaster;
 import org.junit.jupiter.api.Test;
 
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -15,7 +16,9 @@ import static org.mockito.Mockito.verify;
 class LoadLifecycleEventListenerTest {
 
     private final IFleetDriverService service = mock(IFleetDriverService.class);
-    private final LoadLifecycleEventListener listener = new LoadLifecycleEventListener(service, new ObjectMapper());
+    private final LoadStatusBroadcaster broadcaster = mock(LoadStatusBroadcaster.class);
+    private final LoadLifecycleEventListener listener =
+            new LoadLifecycleEventListener(service, new ObjectMapper(), broadcaster);
 
     @Test
     void passesTheLoadWeight() {
@@ -36,5 +39,20 @@ class LoadLifecycleEventListenerTest {
     void ignoresEventsWithoutDriver() {
         listener.handleLoadEvent("{\"payload\":{\"loadId\":2,\"loadStatus\":\"AVAILABLE\",\"weightTons\":2.5}}");
         verify(service, never()).applyLoadStatus(anyString(), anyLong(), anyString(), any());
+    }
+
+    /** KAN-47: también un evento sin conductor (sin candidatos) llega a la línea de tiempo del generador. */
+    @Test
+    void everyEventIsBroadcastEvenWithoutDriver() {
+        listener.handleLoadEvent(
+                "{\"eventType\":\"assignment.unassigned\",\"payload\":{\"loadId\":2,\"loadStatus\":\"AVAILABLE\"}}");
+        verify(broadcaster).broadcast(any());
+        verify(service, never()).applyLoadStatus(anyString(), anyLong(), anyString(), any());
+    }
+
+    @Test
+    void invalidJsonIsDiscardedWithoutBroadcasting() {
+        listener.handleLoadEvent("no es json");
+        verify(broadcaster, never()).broadcast(any());
     }
 }

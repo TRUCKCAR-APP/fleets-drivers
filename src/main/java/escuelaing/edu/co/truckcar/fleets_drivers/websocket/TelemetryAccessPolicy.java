@@ -13,7 +13,8 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>Publicar: un CONDUCTOR solo su propio driverId; COORDINADOR/ADMIN cualquiera (simulación); nadie más.</li>
  *   <li>/topic/fleet-locations: solo la torre de control (COORDINADOR/ADMIN), igual que GET /fleets-drivers/active.</li>
- *   <li>/topic/trip.{loadId}: torre de control, el conductor con esa carga activa o el GENERADOR dueño de la carga.</li>
+ *   <li>/topic/trip.{loadId} (posiciones) y /topic/trip.{loadId}.status (cambios de estado, KAN-47): torre de control,
+ *       el conductor con esa carga activa o el GENERADOR dueño de la carga.</li>
  *   <li>/topic/road-blockages: bloqueos viales detectados por la IA (route-ai-agent); conductores y torre de control.</li>
  *   <li>/user/queue/errors: cualquier sesión (errores propios).</li>
  * </ul>
@@ -29,7 +30,8 @@ public class TelemetryAccessPolicy {
 
     private static final Set<String> CONTROL_TOWER = Set.of("COORDINADOR", "ADMIN");
     // Separador "." y no "/": es la forma de los destinos /topic/<routing-key> del relay STOMP de RabbitMQ.
-    private static final Pattern TRIP_TOPIC = Pattern.compile("^/topic/trip\\.(\\d{1,18})$");
+    // Sufijo opcional .status: cambios de estado de la carga (LoadStatusBroadcaster), con el mismo permiso.
+    private static final Pattern TRIP_TOPIC = Pattern.compile("^/topic/trip\\.(\\d{1,18})(\\.status)?$");
 
     private final IFleetDriverService fleetDriverService;
     private final LoadOwnershipClient loadOwnershipClient;
