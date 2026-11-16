@@ -44,6 +44,20 @@ public class FleetDriverController {
         return ResponseEntity.ok(service.saveOrUpdateState(request));
     }
 
+    /**
+     * Solo la ficha técnica del camión (altura, tara, capacidad, tipo, permisos): los campos que no vienen no cambian y
+     * el estado operativo, la posición, las cargas y la jornada se conservan. La torre o el propio conductor.
+     */
+    @PatchMapping("/drivers/{driverId}/vehicle")
+    public ResponseEntity<DriverVehicleStateResponse> patchVehicle(
+            @PathVariable String driverId,
+            @Valid @RequestBody escuelaing.edu.co.truckcar.fleets_drivers.dto.request.PatchVehicleRequest request,
+            @RequestHeader(value = AUTH_USER_HEADER, required = false) String authenticatedUserId,
+            @RequestHeader(value = AUTH_ROLE_HEADER, required = false) String authenticatedRole) {
+        requireStateWriteAccess(driverId, authenticatedUserId, authenticatedRole);
+        return ResponseEntity.ok(service.patchVehicle(driverId, request));
+    }
+
     private static void requireStateWriteAccess(String driverId, String authenticatedUserId, String authenticatedRole) {
         boolean userRequest = authenticatedUserId != null && !authenticatedUserId.isBlank();
         if (!userRequest || (authenticatedRole != null && FLEET_VIEWER_ROLES.contains(authenticatedRole))) {

@@ -13,6 +13,9 @@ public interface IFleetDriverService {
     DriverVehicleStateResponse getStateByPlate(String plate);
     List<DriverVehicleStateResponse> getAllActiveVehicles();
     List<DriverVehicleStateResponse> getAvailableForNewLoad();
+
+    DriverVehicleStateResponse patchVehicle(String driverId,
+                                            escuelaing.edu.co.truckcar.fleets_drivers.dto.request.PatchVehicleRequest request);
     boolean applyLoadStatus(String driverId, Long loadId, String loadStatus);
     /** Igual que el anterior, con el peso de la carga (t) para la carga a bordo y el peso bruto; null si no se conoce. */
     boolean applyLoadStatus(String driverId, Long loadId, String loadStatus, Double weightTons);

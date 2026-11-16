@@ -216,4 +216,27 @@ class FleetDriverControllerAccessTest {
                 .andExpect(status().isForbidden());
         org.mockito.Mockito.verifyNoInteractions(loadAllocationClient);
     }
+
+    /** Lote 3: la ficha técnica la cambian la torre o el propio conductor; el cuerpo se valida. */
+    @org.junit.jupiter.api.Test
+    void onlyTheTowerOrTheDriverPatchesTheVehicle() throws Exception {
+        when(service.patchVehicle(org.mockito.ArgumentMatchers.eq("ana"), any()))
+                .thenReturn(DriverVehicleStateResponse.builder().driverId("ana").maxHeightMeters(4.2).build());
+        String body = "{\"maxHeightMeters\":4.2}";
+
+        mvc.perform(patchVehicle("ana", "CONDUCTOR", body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.maxHeightMeters").value(4.2));
+        mvc.perform(patchVehicle("coord", "COORDINADOR", body)).andExpect(status().isOk());
+        mvc.perform(patchVehicle("luis", "CONDUCTOR", body)).andExpect(status().isForbidden());
+        mvc.perform(patchVehicle("gen", "GENERADOR", body)).andExpect(status().isForbidden());
+        mvc.perform(patchVehicle("ana", "CONDUCTOR", "{\"maxHeightMeters\":-1}")).andExpect(status().isBadRequest());
+    }
+
+    private static org.springframework.test.web.servlet.RequestBuilder patchVehicle(String user, String role, String body) {
+        return org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .patch("/api/v1/fleets-drivers/drivers/ana/vehicle")
+                .header("X-Auth-User", user).header("X-Auth-Role", role)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(body);
+    }
 }
