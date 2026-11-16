@@ -6,6 +6,8 @@ import escuelaing.edu.co.truckcar.fleets_drivers.exception.FleetAccessDeniedExce
 import escuelaing.edu.co.truckcar.fleets_drivers.exception.FleetUnauthenticatedException;
 import escuelaing.edu.co.truckcar.fleets_drivers.exception.ResourceNotFoundException;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.IFleetDriverService;
+import escuelaing.edu.co.truckcar.fleets_drivers.service.LoadAllocationClient;
+import escuelaing.edu.co.truckcar.fleets_drivers.service.LoadEligibility;
 import escuelaing.edu.co.truckcar.fleets_drivers.websocket.LoadOwnershipClient;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class FleetDriverController {
 
     private final IFleetDriverService service;
     private final LoadOwnershipClient loadOwnershipClient;
+    private final LoadAllocationClient loadAllocationClient;
 
     /**
      * Estado y ubicación de un conductor: el propio CONDUCTOR (solo su driverId), la torre de control
@@ -140,13 +143,26 @@ public class FleetDriverController {
         return ResponseEntity.ok(service.getAllActiveVehicles());
     }
 
-    /** Conductores ACTIVO sin carga aceptada ni en ruta: candidatos para el motor de asignación. */
+    /**
+     * Conductores ACTIVO sin carga aceptada ni en ruta: candidatos para el motor de asignación.
+     * <p>
+     * Con loadId, solo los que pueden recibir esa carga: se quitan los que ya la rechazaron o la dejaron vencer, los que
+     * tienen una propuesta vigente en otra carga y los que no cumplen sus requisitos (tipo de camión, capacidad libre,
+     * RUNT, cadena de frío, descanso obligatorio). Así la torre no elige a alguien que después responde 409 al asignar.
+     * Si Load-Allocation no responde: 503, en lugar de una lista que podría incluir a quien no es elegible.
+     */
     @GetMapping("/available")
     public ResponseEntity<List<DriverVehicleStateResponse>> getAvailable(
+            @RequestParam(required = false) Long loadId,
             @RequestHeader(value = AUTH_USER_HEADER, required = false) String authenticatedUserId,
             @RequestHeader(value = AUTH_ROLE_HEADER, required = false) String authenticatedRole) {
         requireFleetVisibility(authenticatedUserId, authenticatedRole);
-        return ResponseEntity.ok(service.getAvailableForNewLoad());
+        List<DriverVehicleStateResponse> available = service.getAvailableForNewLoad();
+        if (loadId == null) {
+            return ResponseEntity.ok(available);
+        }
+        LoadAllocationClient.LoadSnapshot load = loadAllocationClient.load(loadId);
+        return ResponseEntity.ok(LoadEligibility.eligible(available, load, loadAllocationClient.committedDriverIds()));
     }
 
     /**

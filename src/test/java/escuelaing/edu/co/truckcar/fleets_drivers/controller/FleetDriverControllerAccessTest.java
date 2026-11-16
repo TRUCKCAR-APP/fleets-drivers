@@ -30,15 +30,17 @@ class FleetDriverControllerAccessTest {
 
     private IFleetDriverService service;
     private LoadOwnershipClient loadOwnershipClient;
+    private escuelaing.edu.co.truckcar.fleets_drivers.service.LoadAllocationClient loadAllocationClient;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         service = mock(IFleetDriverService.class);
         loadOwnershipClient = mock(LoadOwnershipClient.class);
+        loadAllocationClient = mock(escuelaing.edu.co.truckcar.fleets_drivers.service.LoadAllocationClient.class);
         when(service.getAllActiveVehicles()).thenReturn(List.of(DriverVehicleStateResponse.builder().driverId("ana").build()));
         when(service.getAvailableForNewLoad()).thenReturn(List.of());
-        mvc = MockMvcBuilders.standaloneSetup(new FleetDriverController(service, loadOwnershipClient))
+        mvc = MockMvcBuilders.standaloneSetup(new FleetDriverController(service, loadOwnershipClient, loadAllocationClient))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -175,5 +177,43 @@ class FleetDriverControllerAccessTest {
                 .thenThrow(new escuelaing.edu.co.truckcar.fleets_drivers.exception.ResourceNotFoundException("no existe"));
 
         getAs("/api/v1/fleets-drivers/vehicles/XXX-000", "ana", "CONDUCTOR").andExpect(status().isForbidden());
+    }
+
+    /** Con loadId la torre solo ve a quien puede recibir esa carga; sin loadId la respuesta no cambia. */
+    @org.junit.jupiter.api.Test
+    void withALoadOnlyEligibleDriversAreListed() throws Exception {
+        var fit = DriverVehicleStateResponse.builder().vehicleType("TURBO").maxPayloadTons(10.0).runtValid(true);
+        when(service.getAvailableForNewLoad()).thenReturn(List.of(
+                fit.driverId("apta").build(), fit.driverId("rechazo").build(), fit.driverId("ocupada").build()));
+        when(loadAllocationClient.load(12L)).thenReturn(new escuelaing.edu.co.truckcar.fleets_drivers.service
+                .LoadAllocationClient.LoadSnapshot(12L, "TURBO", 5.0, java.util.Set.of("rechazo")));
+        when(loadAllocationClient.committedDriverIds()).thenReturn(java.util.Set.of("ocupada"));
+
+        mvc.perform(get("/api/v1/fleets-drivers/available").param("loadId", "12")
+                        .header("X-Auth-User", "u-1").header("X-Auth-Role", "COORDINADOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].driverId").value("apta"));
+        mvc.perform(get("/api/v1/fleets-drivers/available").header("X-Auth-User", "u-1").header("X-Auth-Role", "ADMIN"))
+                .andExpect(jsonPath("$.length()").value(3));
+    }
+
+    @org.junit.jupiter.api.Test
+    void withoutLoadAllocationTheFilteredListIsUnavailableNotWrong() throws Exception {
+        when(loadAllocationClient.load(12L)).thenThrow(new escuelaing.edu.co.truckcar.fleets_drivers.exception
+                .LoadAllocationUnavailableException("No se pudo consultar la carga #12 en Load-Allocation"));
+
+        mvc.perform(get("/api/v1/fleets-drivers/available").param("loadId", "12")
+                        .header("X-Auth-User", "u-1").header("X-Auth-Role", "COORDINADOR"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @org.junit.jupiter.api.Test
+    void aDriverCannotListCandidatesForALoad() throws Exception {
+        mvc.perform(get("/api/v1/fleets-drivers/available").param("loadId", "12")
+                        .header("X-Auth-User", "u-1").header("X-Auth-Role", "CONDUCTOR"))
+                .andExpect(status().isForbidden());
+        org.mockito.Mockito.verifyNoInteractions(loadAllocationClient);
     }
 }
