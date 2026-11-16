@@ -47,7 +47,7 @@ class LivePositionStoreRedisTest {
                 .activeLoads(new HashMap<>(Map.of("30", "IN_TRANSIT"))).build());
         LocalDateTime at = LocalDateTime.of(2026, 11, 3, 14, 5, 9, 123_000_000);
 
-        assertThat(store.updatePosition(driverId, 4.61, -74.08, 62.5, 210.0, at)).isTrue();
+        assertThat(store.updatePosition(driverId, 4.61, -74.08, 62.5, 210.0, at, null)).isTrue();
 
         DriverVehicleState read = repository.findById(driverId).orElseThrow();
         assertThat(read.getCurrentLatitude()).isEqualTo(4.61);
@@ -60,9 +60,26 @@ class LivePositionStoreRedisTest {
         assertThat(repository.findByVehiclePlate("TST-001")).isPresent();
     }
 
+    /** Lote 3: la jornada calculada va en el mismo HSET y el repositorio la lee con sus tipos (LocalDate, Long, boolean). */
+    @Test
+    void theShiftIsWrittenWithThePositionAndReadBackByTheRepository() {
+        repository.save(DriverVehicleState.builder().driverId(driverId).vehiclePlate("TST-002").status("ACTIVO").build());
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 16);
+        DrivingTime shift = new DrivingTime(day, 7 * 3600L + 120, 7.0, 2.0, true);
+
+        assertThat(store.updatePosition(driverId, 4.61, -74.08, 70.0, null, day.atTime(15, 0), shift)).isTrue();
+
+        DriverVehicleState read = repository.findById(driverId).orElseThrow();
+        assertThat(read.getDrivingDay()).isEqualTo(day);
+        assertThat(read.getDrivingSecondsToday()).isEqualTo(7 * 3600L + 120);
+        assertThat(read.getDrivingHoursToday()).isEqualTo(7.0);
+        assertThat(read.getRemainingDrivingHours()).isEqualTo(2.0);
+        assertThat(read.isRestRequiredAlert()).isTrue();
+    }
+
     @Test
     void aMissingDriverIsNotCreatedByAPosition() {
-        assertThat(store.updatePosition(driverId, 4.61, -74.08, null, null, LocalDateTime.now())).isFalse();
+        assertThat(store.updatePosition(driverId, 4.61, -74.08, null, null, LocalDateTime.now(), null)).isFalse();
 
         assertThat(redis.hasKey(LivePositionStore.KEY_PREFIX + driverId)).isFalse();
     }

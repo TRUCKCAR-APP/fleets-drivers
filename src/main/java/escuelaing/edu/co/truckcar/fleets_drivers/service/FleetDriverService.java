@@ -60,12 +60,13 @@ public class FleetDriverService implements IFleetDriverService {
                 : request.getNetCargoWeightTons();
         double grossWeight = grossTons(request.getTareWeightTons(), netCargo);
 
-        double remainingHours = this.maxDailyDrivingHours;
-        boolean restAlert = false;
-        if (request.getDrivingHoursToday() != null) {
-            remainingHours = Math.max(0.0, this.maxDailyDrivingHours - request.getDrivingHoursToday());            remainingHours = Math.round(remainingHours * 10.0) / 10.0;
-            restAlert = remainingHours <= 2.0;
-        }
+        // Las horas de conducción las calcula el servidor con la telemetría (DrivingTime): lo que mande el formulario se
+        // ignora y se conserva la cuenta del día.
+        DrivingTime driving = DrivingTime.asOf(existing == null ? null : existing.getDrivingDay(),
+                existing == null ? null : existing.getDrivingSecondsToday(), LocalDateTime.now().toLocalDate(),
+                maxDailyHours());
+        double remainingHours = driving.remainingHours();
+        boolean restAlert = driving.restRequired();
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -83,7 +84,9 @@ public class FleetDriverService implements IFleetDriverService {
                 .maxPayloadTons(request.getMaxPayloadTons())
                 .tareWeightTons(request.getTareWeightTons())
                 .grossWeightTons(grossWeight)
-                .drivingHoursToday(request.getDrivingHoursToday())
+                .drivingHoursToday(driving.hoursToday())
+                .drivingSecondsToday(driving.seconds())
+                .drivingDay(driving.day())
                 .maxDailyDrivingHours(this.maxDailyDrivingHours)
                 .remainingDrivingHours(remainingHours)
                 .mandatoryRestLocation(request.getMandatoryRestLocation())
@@ -179,6 +182,9 @@ public class FleetDriverService implements IFleetDriverService {
     }
 
     private FleetLocationMessage applyLocation(DriverVehicleState state, LocationUpdateMessage update, LocalDateTime now) {
+        // Antes de pisar la posición anterior: su hora y su velocidad dicen si el camión venía en movimiento.
+        DrivingTime driving = DrivingTime.next(state.getDrivingDay(), state.getDrivingSecondsToday(), state.getLastUpdate(),
+                state.getCurrentSpeedKmH(), now, maxDailyHours());
         state.setCurrentLatitude(update.getLatitude());
         state.setCurrentLongitude(update.getLongitude());
         if (update.getSpeedKmH() != null) {
@@ -191,7 +197,7 @@ public class FleetDriverService implements IFleetDriverService {
         // Telemetría frecuente: HSET de los campos de posición, sin reescribir el hash ni encolar un evento de
         // disponibilidad por cada punto.
         if (!livePositions.updatePosition(state.getDriverId(), state.getCurrentLatitude(), state.getCurrentLongitude(),
-                state.getCurrentSpeedKmH(), state.getCurrentHeading(), now)) {
+                state.getCurrentSpeedKmH(), state.getCurrentHeading(), now, driving)) {
             throw new ResourceNotFoundException("El conductor " + state.getDriverId()
                     + " no tiene vehículo registrado en la flota");
         }
@@ -211,6 +217,56 @@ public class FleetDriverService implements IFleetDriverService {
                 .loadStatus(loadStatus)
                 .timestamp(now.atZone(java.time.ZoneId.systemDefault()).toInstant())
                 .build();
+    }
+
+    /**
+     * Solo la ficha técnica del camión (Lote 3): los campos que no vienen no cambian, y el estado operativo, la
+     * posición, las cargas activas y la jornada se conservan. POST /state sigue siendo el alta completa.
+     */
+    @Override
+    @Transactional
+    public DriverVehicleStateResponse patchVehicle(String driverId,
+                                                   escuelaing.edu.co.truckcar.fleets_drivers.dto.request.PatchVehicleRequest request) {
+        DriverVehicleState state = repository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("El conductor " + driverId
+                        + " no tiene vehículo registrado en la flota; regístrelo primero"));
+        if (request.getVehiclePlate() != null) {
+            String plate = normalizePlate(request.getVehiclePlate());
+            boolean takenByOther = repository.findAllByVehiclePlate(plate).stream()
+                    .anyMatch(other -> !other.getDriverId().equals(driverId));
+            if (takenByOther) {
+                throw new PlateAlreadyRegisteredException("La placa " + plate + " ya está registrada en el vehículo de otro conductor");
+            }
+            state.setVehiclePlate(plate);
+        }
+        if (request.getVehicleModel() != null) state.setVehicleModel(request.getVehicleModel().trim());
+        if (request.getVehicleType() != null) state.setVehicleType(request.getVehicleType().trim().toUpperCase(Locale.ROOT));
+        if (request.getMaxHeightMeters() != null) state.setMaxHeightMeters(request.getMaxHeightMeters());
+        if (request.getMaxPayloadTons() != null) state.setMaxPayloadTons(request.getMaxPayloadTons());
+        if (request.getTareWeightTons() != null) {
+            state.setTareWeightTons(request.getTareWeightTons());
+            state.setGrossWeightTons(grossTons(request.getTareWeightTons(), state.getNetCargoWeightTons()));
+        }
+        if (request.getLicenseCategory() != null) state.setLicenseCategory(request.getLicenseCategory().trim());
+        if (request.getHazmatAuthorized() != null) state.setHazmatAuthorized(request.getHazmatAuthorized());
+        if (request.getColdChainCertified() != null) state.setColdChainCertified(request.getColdChainCertified());
+        if (request.getRuntValid() != null) state.setRuntValid(request.getRuntValid());
+        if (request.getElectronicTollTagActive() != null) state.setElectronicTollTagActive(request.getElectronicTollTagActive());
+
+        DriverVehicleState saved = repository.save(state);
+        outboxEventService.enqueueAvailabilityEvent(saved);
+        log.info("Ficha técnica del vehículo de {} actualizada (placa {})", driverId, saved.getVehiclePlate());
+        return mapToResponse(saved);
+    }
+
+    /** La jornada guardada vista hoy: una cuenta de un día anterior ya no cuenta (se reinicia a medianoche). */
+    private DrivingTime todayDriving(DriverVehicleState entity) {
+        return DrivingTime.asOf(entity.getDrivingDay(), entity.getDrivingSecondsToday(), LocalDateTime.now().toLocalDate(),
+                entity.getMaxDailyDrivingHours() != null ? entity.getMaxDailyDrivingHours() : maxDailyHours());
+    }
+
+    private double maxDailyHours() {
+        return maxDailyDrivingHours == null ? 9.0 : maxDailyDrivingHours;
     }
 
     @Override
@@ -328,11 +384,11 @@ public class FleetDriverService implements IFleetDriverService {
                 .maxPayloadTons(entity.getMaxPayloadTons())
                 .tareWeightTons(entity.getTareWeightTons())
                 .grossWeightTons(entity.getGrossWeightTons())
-                .drivingHoursToday(entity.getDrivingHoursToday())
+                .drivingHoursToday(todayDriving(entity).hoursToday())
                 .maxDailyDrivingHours(entity.getMaxDailyDrivingHours())
-                .remainingDrivingHours(entity.getRemainingDrivingHours())
+                .remainingDrivingHours(todayDriving(entity).remainingHours())
                 .mandatoryRestLocation(entity.getMandatoryRestLocation())
-                .restRequiredAlert(entity.isRestRequiredAlert())
+                .restRequiredAlert(todayDriving(entity).restRequired())
                 .hazmatAuthorized(entity.isHazmatAuthorized())
                 .coldChainCertified(entity.isColdChainCertified())
                 .runtValid(entity.isRuntValid())

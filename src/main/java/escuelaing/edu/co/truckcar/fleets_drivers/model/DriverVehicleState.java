@@ -41,6 +41,9 @@ public class DriverVehicleState implements Serializable {
     private Double grossWeightTons;
 
     private Double drivingHoursToday;
+    /** Segundos de conducción del día {@link #drivingDay}, calculados con la telemetría (DrivingTime). */
+    private Long drivingSecondsToday;
+    private java.time.LocalDate drivingDay;
     private Double maxDailyDrivingHours;
     private Double remainingDrivingHours;
     private String mandatoryRestLocation;

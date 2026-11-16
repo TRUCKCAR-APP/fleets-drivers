@@ -48,7 +48,7 @@ class FleetDriverServiceActiveLoadsTest {
         service = new FleetDriverService(repository, outboxEventService, livePositions, accountStatuses);
         ReflectionTestUtils.setField(service, "maxDailyDrivingHours", 9.0);
         when(repository.save(any(DriverVehicleState.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(livePositions.updatePosition(any(), any(), any(), any(), any(), any())).thenReturn(true);
+        when(livePositions.updatePosition(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
     }
 
     private DriverVehicleState driver(String id, String status, Map<String, String> activeLoads) {
@@ -241,14 +241,14 @@ class FleetDriverServiceActiveLoadsTest {
         assertThat(otherLoad.getLoadId()).isNull();
         verify(outboxEventService, never()).enqueueAvailabilityEvent(any());
         // Solo los campos de posición (HSET): el hash completo no se reescribe por cada punto.
-        verify(livePositions).updatePosition(eq("ana"), eq(4.8), eq(-74.3), eq(55.0), eq(180.0), any());
+        verify(livePositions).updatePosition(eq("ana"), eq(4.8), eq(-74.3), eq(55.0), eq(180.0), any(), any());
         verify(repository, never()).save(any());
     }
 
     @Test
     void aPositionForADriverRemovedMeanwhileFails() {
         driver("ana", "ACTIVO", Map.of());
-        when(livePositions.updatePosition(eq("ana"), any(), any(), any(), any(), any())).thenReturn(false);
+        when(livePositions.updatePosition(eq("ana"), any(), any(), any(), any(), any(), any())).thenReturn(false);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.recordLocation(
                 escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.LocationUpdateMessage.builder()

@@ -39,8 +39,17 @@ public class LivePositionStore {
 
     /** Devuelve false si el conductor ya no existe en Redis. */
     public boolean updatePosition(String driverId, Double latitude, Double longitude, Double speedKmH, Double heading,
-                                  LocalDateTime lastUpdate) {
-        List<String> fields = new ArrayList<>(10);
+                                  LocalDateTime lastUpdate, DrivingTime driving) {
+        List<String> fields = new ArrayList<>(20);
+        // La jornada va en el mismo HSET atómico que la posición: no se pisa con otro flujo ni queda a medias.
+        if (driving != null) {
+            add(fields, "drivingDay", driving.day());
+            add(fields, "drivingSecondsToday", driving.seconds());
+            add(fields, "drivingHoursToday", driving.hoursToday());
+            add(fields, "remainingDrivingHours", driving.remainingHours());
+            // Spring Data Redis guarda los boolean como "1"/"0": se escribe igual para que el repositorio lo lea sin cambios.
+            add(fields, "restRequiredAlert", driving.restRequired() ? "1" : "0");
+        }
         add(fields, "currentLatitude", latitude);
         add(fields, "currentLongitude", longitude);
         add(fields, "currentSpeedKmH", speedKmH);
