@@ -45,7 +45,8 @@ class FleetDriverServiceActiveLoadsTest {
 
     @BeforeEach
     void setUp() {
-        service = new FleetDriverService(repository, outboxEventService, livePositions, accountStatuses);
+        service = new FleetDriverService(repository, outboxEventService, livePositions, accountStatuses,
+                TestAffiliations.unknownForEveryone());
         ReflectionTestUtils.setField(service, "maxDailyDrivingHours", 9.0);
         when(repository.save(any(DriverVehicleState.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(livePositions.updatePosition(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
@@ -132,6 +133,39 @@ class FleetDriverServiceActiveLoadsTest {
                         org.assertj.core.groups.Tuple.tuple("verificado", "ACTIVE", true),
                         org.assertj.core.groups.Tuple.tuple("pendiente", "PENDING_VERIFICATION", false),
                         org.assertj.core.groups.Tuple.tuple("sin-evento", null, false));
+    }
+
+    @Test
+    void anIndependentOrNotYetAcceptedCompanyDriverIsNeverAvailableButALegacyOneIs() {
+        DriverAffiliationStore affiliations = org.mockito.Mockito.mock(DriverAffiliationStore.class);
+        FleetDriverService withAffiliations = new FleetDriverService(repository, outboxEventService, livePositions,
+                accountStatuses, affiliations);
+        var independent = new DriverAffiliationStore.Affiliation("INDEPENDIENTE", null, null, null, false);
+        var pending = new DriverAffiliationStore.Affiliation("EMPRESA", "c-1", "Transportes Andinos", "PENDIENTE", false);
+        var active = new DriverAffiliationStore.Affiliation("EMPRESA", "c-1", "Transportes Andinos", "ACTIVA", true);
+        List<DriverVehicleState> drivers = List.of(driver("independiente", "ACTIVO", Map.of()),
+                driver("pendiente", "ACTIVO", Map.of()), driver("afiliado", "ACTIVO", Map.of()),
+                driver("antiguo", "ACTIVO", Map.of()));
+        when(repository.findAll()).thenReturn(drivers);
+        when(accountStatuses.isVerified(any())).thenReturn(true);
+        when(affiliations.get("independiente")).thenReturn(independent);
+        when(affiliations.get("pendiente")).thenReturn(pending);
+        when(affiliations.get("afiliado")).thenReturn(active);
+        when(affiliations.allowsLoads("independiente")).thenReturn(false);
+        when(affiliations.allowsLoads("pendiente")).thenReturn(false);
+        when(affiliations.allowsLoads("afiliado")).thenReturn(true);
+        when(affiliations.allowsLoads("antiguo")).thenReturn(true);
+
+        assertThat(withAffiliations.getAvailableForNewLoad()).extracting(DriverVehicleStateResponse::getDriverId)
+                .containsExactly("afiliado", "antiguo");
+        assertThat(withAffiliations.getAllActiveVehicles())
+                .extracting(DriverVehicleStateResponse::getDriverId, DriverVehicleStateResponse::getDriverType,
+                        DriverVehicleStateResponse::getCompanyName, DriverVehicleStateResponse::isLoadEligible)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("independiente", "INDEPENDIENTE", null, false),
+                        org.assertj.core.groups.Tuple.tuple("pendiente", "EMPRESA", "Transportes Andinos", false),
+                        org.assertj.core.groups.Tuple.tuple("afiliado", "EMPRESA", "Transportes Andinos", true),
+                        org.assertj.core.groups.Tuple.tuple("antiguo", null, null, true));
     }
 
     @Test

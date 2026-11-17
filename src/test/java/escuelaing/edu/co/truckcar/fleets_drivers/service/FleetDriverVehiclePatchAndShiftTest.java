@@ -43,7 +43,8 @@ class FleetDriverVehiclePatchAndShiftTest {
         repository = mock(DriverVehicleStateRepository.class);
         outbox = mock(OutboxEventService.class);
         livePositions = mock(LivePositionStore.class);
-        service = new FleetDriverService(repository, outbox, livePositions, mock(AccountStatusStore.class));
+        service = new FleetDriverService(repository, outbox, livePositions, mock(AccountStatusStore.class),
+                TestAffiliations.unknownForEveryone());
         ReflectionTestUtils.setField(service, "maxDailyDrivingHours", 9.0);
         Map<String, String> loads = new HashMap<>(Map.of("12", "IN_TRANSIT"));
         ana = DriverVehicleState.builder().driverId("ana").driverName("Ana").vehiclePlate("TDK-410").vehicleType("TURBO")
