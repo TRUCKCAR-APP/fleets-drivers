@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.AccountStatusStore;
+import escuelaing.edu.co.truckcar.fleets_drivers.service.DriverAffiliationStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component;
 public class UserAccountEventListener {
 
     private final AccountStatusStore accountStatuses;
+    private final DriverAffiliationStore affiliations;
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = "${truckcar.kafka.topic.user-events:truckcar.events.user-events}",
@@ -39,7 +41,15 @@ public class UserAccountEventListener {
         if (userId == null) {
             return;
         }
-        if ("user.status.changed".equals(type)) {
+        if ("user.affiliation.changed".equals(type)) {
+            String driverType = text(payload, "driverType");
+            if (driverType != null) {
+                affiliations.put(userId, new DriverAffiliationStore.Affiliation(driverType, text(payload, "companyId"),
+                        text(payload, "companyName"), text(payload, "affiliationStatus"),
+                        payload.path("loadEligible").asBoolean(false)));
+                log.info("Afiliación de {}: {} (cargas: {})", userId, driverType, payload.path("loadEligible").asBoolean(false));
+            }
+        } else if ("user.status.changed".equals(type)) {
             String status = text(payload, "status");
             if (status != null) {
                 accountStatuses.put(userId, status);

@@ -32,6 +32,7 @@ public class FleetDriverService implements IFleetDriverService {
     private final OutboxEventService outboxEventService;
     private final LivePositionStore livePositions;
     private final AccountStatusStore accountStatuses;
+    private final DriverAffiliationStore affiliations;
 
     private static final Set<String> COMMITTED_LOAD_STATUSES = Set.of("ASSIGNED", "IN_TRANSIT");
 
@@ -137,14 +138,16 @@ public class FleetDriverService implements IFleetDriverService {
     }
 
     /**
-     * Conductores ACTIVO, con la cuenta verificada por un administrador y sin carga aceptada ni en ruta: los únicos
-     * que pueden recibir una carga nueva.
+     * Conductores ACTIVO, con la cuenta verificada por un administrador, con una afiliación que les permite cargas
+     * (no independientes ni de empresa sin la afiliación ACTIVA) y sin carga aceptada ni en ruta: los únicos que
+     * pueden recibir una carga nueva.
      */
     @Override
     public List<DriverVehicleStateResponse> getAvailableForNewLoad() {
         return StreamSupport.stream(repository.findAll().spliterator(), false)
                 .filter(state -> state != null && "ACTIVO".equalsIgnoreCase(state.getStatus()))
                 .filter(state -> accountStatuses.isVerified(state.getDriverId()))
+                .filter(state -> affiliations.allowsLoads(state.getDriverId()))
                 .filter(state -> activeLoadsOf(state).isEmpty())
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -365,9 +368,14 @@ public class FleetDriverService implements IFleetDriverService {
                         .thenComparing(e -> -Long.parseLong(e.getKey())))
                 .orElse(null);
         String accountStatus = accountStatuses.get(entity.getDriverId());
+        DriverAffiliationStore.Affiliation affiliation = affiliations.get(entity.getDriverId());
         return DriverVehicleStateResponse.builder()
                 .accountStatus(accountStatus)
                 .accountVerified(AccountStatusStore.VERIFIED.equals(accountStatus))
+                .driverType(affiliation == null ? null : affiliation.driverType())
+                .companyName(affiliation == null ? null : affiliation.companyName())
+                .affiliationStatus(affiliation == null ? null : affiliation.affiliationStatus())
+                .loadEligible(affiliation == null || affiliation.loadEligible())
                 .currentLoadId(current == null ? null : Long.valueOf(current.getKey()))
                 .currentLoadStatus(current == null ? null : current.getValue())
                 .onTrip(current != null)

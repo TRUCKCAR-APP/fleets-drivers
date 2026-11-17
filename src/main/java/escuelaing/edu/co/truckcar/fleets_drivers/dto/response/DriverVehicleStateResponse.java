@@ -61,4 +61,16 @@ public class DriverVehicleStateResponse {
 
     /** Cuenta verificada por un administrador (ACTIVE): sin esto el conductor no entra al matching. */
     private boolean accountVerified;
+
+    /** INDEPENDIENTE o EMPRESA según user-identity; null en cuentas anteriores a la afiliación. */
+    private String driverType;
+
+    /** Transportadora del conductor de empresa. */
+    private String companyName;
+
+    /** PENDIENTE, ACTIVA o RECHAZADA (solo conductores de empresa). */
+    private String affiliationStatus;
+
+    /** Si su afiliación le permite recibir cargas (independiente o sin afiliación activa: no). */
+    private boolean loadEligible;
 }

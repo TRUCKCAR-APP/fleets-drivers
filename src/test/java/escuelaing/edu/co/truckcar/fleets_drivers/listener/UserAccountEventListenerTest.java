@@ -2,6 +2,7 @@ package escuelaing.edu.co.truckcar.fleets_drivers.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import escuelaing.edu.co.truckcar.fleets_drivers.service.AccountStatusStore;
+import escuelaing.edu.co.truckcar.fleets_drivers.service.DriverAffiliationStore;
 import org.junit.jupiter.api.Test;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -15,7 +16,9 @@ import static org.mockito.Mockito.when;
 class UserAccountEventListenerTest {
 
     private final AccountStatusStore store = mock(AccountStatusStore.class);
-    private final UserAccountEventListener listener = new UserAccountEventListener(store, new ObjectMapper());
+    private final DriverAffiliationStore affiliations = mock(DriverAffiliationStore.class);
+    private final UserAccountEventListener listener =
+            new UserAccountEventListener(store, affiliations, new ObjectMapper());
 
     private static String envelope(String type, String payload) {
         return """
@@ -54,6 +57,23 @@ class UserAccountEventListenerTest {
         listener.handleUserEvent(envelope("user.role.changed", "{\"userId\": \"d-5\", \"newRole\": \"ADMIN\"}"));
         listener.handleUserEvent("no es json");
 
+        verify(store, never()).put(anyString(), any());
+        verify(affiliations, never()).put(anyString(), any());
+    }
+
+    @Test
+    void theAffiliationOfAnIndependentOrACompanyDriverIsStoredWithItsLoadEligibility() {
+        listener.handleUserEvent(envelope("user.affiliation.changed", """
+                {"userId": "d-6", "driverType": "INDEPENDIENTE", "companyId": null, "companyName": null,
+                 "affiliationStatus": null, "loadEligible": false}"""));
+        verify(affiliations).put("d-6", new DriverAffiliationStore.Affiliation("INDEPENDIENTE", null, null, null, false));
+
+        listener.handleUserEvent(envelope("user.affiliation.changed", """
+                {"userId": "d-7", "driverType": "EMPRESA", "companyId": "c-1", "companyName": "Transportes Andinos",
+                 "affiliationStatus": "ACTIVA", "loadEligible": true, "campoNuevo": 1}"""));
+        verify(affiliations).put("d-7",
+                new DriverAffiliationStore.Affiliation("EMPRESA", "c-1", "Transportes Andinos", "ACTIVA", true));
+        // La afiliación no toca el estado de la cuenta.
         verify(store, never()).put(anyString(), any());
     }
 }
