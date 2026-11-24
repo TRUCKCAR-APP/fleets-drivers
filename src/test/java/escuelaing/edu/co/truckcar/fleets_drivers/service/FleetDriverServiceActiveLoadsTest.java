@@ -136,7 +136,7 @@ class FleetDriverServiceActiveLoadsTest {
     }
 
     @Test
-    void anIndependentOrNotYetAcceptedCompanyDriverIsNeverAvailableButALegacyOneIs() {
+    void anIndependentAPendingOrAnUntypedDriverIsNeverAvailable() {
         DriverAffiliationStore affiliations = org.mockito.Mockito.mock(DriverAffiliationStore.class);
         FleetDriverService withAffiliations = new FleetDriverService(repository, outboxEventService, livePositions,
                 accountStatuses, affiliations);
@@ -154,10 +154,10 @@ class FleetDriverServiceActiveLoadsTest {
         when(affiliations.allowsLoads("independiente")).thenReturn(false);
         when(affiliations.allowsLoads("pendiente")).thenReturn(false);
         when(affiliations.allowsLoads("afiliado")).thenReturn(true);
-        when(affiliations.allowsLoads("antiguo")).thenReturn(true);
+        when(affiliations.allowsLoads("antiguo")).thenReturn(false);
 
         assertThat(withAffiliations.getAvailableForNewLoad()).extracting(DriverVehicleStateResponse::getDriverId)
-                .containsExactly("afiliado", "antiguo");
+                .containsExactly("afiliado");
         assertThat(withAffiliations.getAllActiveVehicles())
                 .extracting(DriverVehicleStateResponse::getDriverId, DriverVehicleStateResponse::getDriverType,
                         DriverVehicleStateResponse::getCompanyName, DriverVehicleStateResponse::isLoadEligible)
@@ -165,7 +165,7 @@ class FleetDriverServiceActiveLoadsTest {
                         org.assertj.core.groups.Tuple.tuple("independiente", "INDEPENDIENTE", null, false),
                         org.assertj.core.groups.Tuple.tuple("pendiente", "EMPRESA", "Transportes Andinos", false),
                         org.assertj.core.groups.Tuple.tuple("afiliado", "EMPRESA", "Transportes Andinos", true),
-                        org.assertj.core.groups.Tuple.tuple("antiguo", null, null, true));
+                        org.assertj.core.groups.Tuple.tuple("antiguo", null, null, false));
     }
 
     @Test
