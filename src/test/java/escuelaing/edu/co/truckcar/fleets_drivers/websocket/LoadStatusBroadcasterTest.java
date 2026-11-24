@@ -53,7 +53,7 @@ class LoadStatusBroadcasterTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"assignment.proposed", "assignment.notified", "assignment.rejected", "assignment.timeout",
-            "assignment.unassigned", "trip.started", "trip.delivered", "load.cancelled"})
+            "assignment.unassigned", "trip.started", "trip.pickup_arrived", "trip.picked_up", "trip.delivered", "load.cancelled"})
     void everyLifecycleEventIsPublished(String eventType) throws Exception {
         broadcaster.broadcast(mapper.readTree("{\"eventType\":\"" + eventType + "\",\"payload\":{\"loadId\":7}}"));
         verify(messaging).convertAndSend(eq("/topic/trip.7.status"), any(Object.class));

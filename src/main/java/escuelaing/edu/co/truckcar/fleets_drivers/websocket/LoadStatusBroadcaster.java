@@ -30,7 +30,8 @@ public class LoadStatusBroadcaster {
     /** Eventos que cambian lo que ve el generador en la línea de tiempo. load.published no: aún nadie la sigue. */
     static final Set<String> LIFECYCLE_EVENTS = Set.of(
             "assignment.proposed", "assignment.notified", "assignment.accepted", "assignment.rejected",
-            "assignment.timeout", "assignment.unassigned", "trip.started", "trip.delivered", "load.cancelled");
+            "assignment.timeout", "assignment.unassigned", "trip.started", "trip.pickup_arrived", "trip.picked_up",
+            "trip.delivered", "load.cancelled");
 
     private final SimpMessagingTemplate messagingTemplate;
 
