@@ -79,6 +79,11 @@ public class GlobalExceptionHandler {
                 "El cuerpo debe ser JSON válido en UTF-8 con los campos y valores esperados");
     }
 
+    @ExceptionHandler(IdentityUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleIdentityUnavailable(IdentityUnavailableException ex) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable", "Servicio no disponible", ex.getMessage());
+    }
+
     @ExceptionHandler(LoadAllocationUnavailableException.class)
     public ResponseEntity<ProblemDetail> handleLoadAllocationUnavailable(LoadAllocationUnavailableException ex) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable", "Servicio no disponible", ex.getMessage());
