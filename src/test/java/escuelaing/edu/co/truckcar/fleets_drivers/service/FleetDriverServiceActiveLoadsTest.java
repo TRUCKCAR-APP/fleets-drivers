@@ -160,12 +160,13 @@ class FleetDriverServiceActiveLoadsTest {
                 .containsExactly("afiliado");
         assertThat(withAffiliations.getAllActiveVehicles())
                 .extracting(DriverVehicleStateResponse::getDriverId, DriverVehicleStateResponse::getDriverType,
-                        DriverVehicleStateResponse::getCompanyName, DriverVehicleStateResponse::isLoadEligible)
+                        DriverVehicleStateResponse::getCompanyId, DriverVehicleStateResponse::getCompanyName,
+                        DriverVehicleStateResponse::isLoadEligible)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("independiente", "INDEPENDIENTE", null, false),
-                        org.assertj.core.groups.Tuple.tuple("pendiente", "EMPRESA", "Transportes Andinos", false),
-                        org.assertj.core.groups.Tuple.tuple("afiliado", "EMPRESA", "Transportes Andinos", true),
-                        org.assertj.core.groups.Tuple.tuple("antiguo", null, null, false));
+                        org.assertj.core.groups.Tuple.tuple("independiente", "INDEPENDIENTE", null, null, false),
+                        org.assertj.core.groups.Tuple.tuple("pendiente", "EMPRESA", "c-1", "Transportes Andinos", false),
+                        org.assertj.core.groups.Tuple.tuple("afiliado", "EMPRESA", "c-1", "Transportes Andinos", true),
+                        org.assertj.core.groups.Tuple.tuple("antiguo", null, null, null, false));
     }
 
     @Test

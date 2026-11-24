@@ -65,7 +65,9 @@ public class DriverVehicleStateResponse {
     /** INDEPENDIENTE o EMPRESA según user-identity; null en cuentas anteriores a la afiliación. */
     private String driverType;
 
-    /** Transportadora del conductor de empresa. */
+    /** Transportadora del conductor de empresa: id en user-identity (cargas propias de la empresa) y nombre. */
+    private String companyId;
+
     private String companyName;
 
     /** PENDIENTE, ACTIVA o RECHAZADA (solo conductores de empresa). */
