@@ -148,13 +148,21 @@ public class FleetDriverController {
         }
     }
 
-    /** Posición y estado de toda la flota: torre de control (COORDINADOR o ADMIN) y servicios internos. */
+    /**
+     * Posición y estado de la flota operativa: torre de control (COORDINADOR o ADMIN) y servicios internos. A la torre no
+     * le llegan los conductores independientes: solo usan la navegación y no hacen parte de la operación de cargas.
+     */
     @GetMapping("/active")
     public ResponseEntity<List<DriverVehicleStateResponse>> getAllActive(
             @RequestHeader(value = AUTH_USER_HEADER, required = false) String authenticatedUserId,
             @RequestHeader(value = AUTH_ROLE_HEADER, required = false) String authenticatedRole) {
         requireFleetVisibility(authenticatedUserId, authenticatedRole);
-        return ResponseEntity.ok(service.getAllActiveVehicles());
+        boolean userRequest = authenticatedUserId != null && !authenticatedUserId.isBlank();
+        List<DriverVehicleStateResponse> fleet = service.getAllActiveVehicles();
+        if (userRequest) {
+            fleet = fleet.stream().filter(d -> !"INDEPENDIENTE".equals(d.getDriverType())).toList();
+        }
+        return ResponseEntity.ok(fleet);
     }
 
     /**

@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 /**
  * Tipo de conductor y afiliación a una transportadora según user-identity (evento user.affiliation.changed), en el
  * hash de Redis driver_affiliation. Un independiente o un conductor de empresa sin la afiliación ACTIVA no recibe
- * cargas (loadEligible=false). Un conductor del que nunca llegó el evento (cuentas anteriores a la afiliación) conserva
- * el comportamiento de antes: puede recibir cargas.
+ * cargas (loadEligible=false). Un conductor del que nunca llegó el evento (sin tipo definido) tampoco: debe elegir si
+ * es independiente o de una transportadora, y solo el afiliado ACTIVA a una empresa recibe cargas.
  */
 @Slf4j
 @Component
@@ -50,9 +50,15 @@ public class DriverAffiliationStore {
         }
     }
 
-    /** Si la afiliación le permite recibir cargas (sin dato: sí, como antes de la afiliación). */
+    /** Si la afiliación le permite recibir cargas (sin tipo definido: no, hasta que lo elija). */
     public boolean allowsLoads(String driverId) {
         Affiliation affiliation = get(driverId);
-        return affiliation == null || affiliation.loadEligible();
+        return affiliation != null && affiliation.loadEligible();
+    }
+
+    /** Conductor independiente: usa la navegación pero no hace parte de la operación de cargas. */
+    public boolean isIndependent(String driverId) {
+        Affiliation affiliation = get(driverId);
+        return affiliation != null && "INDEPENDIENTE".equals(affiliation.driverType());
     }
 }

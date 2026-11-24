@@ -1,7 +1,8 @@
 package escuelaing.edu.co.truckcar.fleets_drivers.websocket;
 
 import escuelaing.edu.co.truckcar.fleets_drivers.dto.telemetry.FleetLocationMessage;
-import lombok.RequiredArgsConstructor;
+import escuelaing.edu.co.truckcar.fleets_drivers.service.DriverAffiliationStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -19,14 +20,30 @@ import java.util.concurrent.ConcurrentHashMap;
  * persona y la frecuencia es la de un camión.
  */
 @Component
-@RequiredArgsConstructor
 public class FleetBroadcaster {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final Map<String, FleetLocationMessage> latest = new ConcurrentHashMap<>();
+    /** Para no enviar a la torre las posiciones de los independientes (sin él, en pruebas, se envían todas). */
+    private DriverAffiliationStore affiliations;
 
-    /** Reemplaza la posición pendiente del conductor: entre dos envíos solo cuenta la más reciente. */
+    public FleetBroadcaster(SimpMessagingTemplate messagingTemplate) {
+        this.messagingTemplate = messagingTemplate;
+    }
+
+    @Autowired(required = false)
+    void setAffiliations(DriverAffiliationStore affiliations) {
+        this.affiliations = affiliations;
+    }
+
+    /**
+     * Reemplaza la posición pendiente del conductor: entre dos envíos solo cuenta la más reciente. Las de un conductor
+     * independiente no van a la torre: no hace parte de la operación de cargas.
+     */
     public void publish(FleetLocationMessage location) {
+        if (affiliations != null && affiliations.isIndependent(location.getDriverId())) {
+            return;
+        }
         latest.merge(location.getDriverId(), location, (pending, incoming) ->
                 pending.getTimestamp() != null && incoming.getTimestamp() != null
                         && incoming.getTimestamp().isBefore(pending.getTimestamp()) ? pending : incoming);

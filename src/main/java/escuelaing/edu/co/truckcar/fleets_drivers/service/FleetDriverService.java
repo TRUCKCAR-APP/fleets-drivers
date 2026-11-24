@@ -375,7 +375,7 @@ public class FleetDriverService implements IFleetDriverService {
                 .driverType(affiliation == null ? null : affiliation.driverType())
                 .companyName(affiliation == null ? null : affiliation.companyName())
                 .affiliationStatus(affiliation == null ? null : affiliation.affiliationStatus())
-                .loadEligible(affiliation == null || affiliation.loadEligible())
+                .loadEligible(affiliation != null && affiliation.loadEligible())
                 .currentLoadId(current == null ? null : Long.valueOf(current.getKey()))
                 .currentLoadStatus(current == null ? null : current.getValue())
                 .onTrip(current != null)
