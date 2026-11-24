@@ -373,6 +373,7 @@ public class FleetDriverService implements IFleetDriverService {
                 .accountStatus(accountStatus)
                 .accountVerified(AccountStatusStore.VERIFIED.equals(accountStatus))
                 .driverType(affiliation == null ? null : affiliation.driverType())
+                .companyId(affiliation == null ? null : affiliation.companyId())
                 .companyName(affiliation == null ? null : affiliation.companyName())
                 .affiliationStatus(affiliation == null ? null : affiliation.affiliationStatus())
                 .loadEligible(affiliation != null && affiliation.loadEligible())
